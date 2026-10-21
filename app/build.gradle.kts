@@ -31,7 +31,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.github.libretube"
+        applicationId = "com.roottube.android"
         minSdk = 26
         targetSdk = 36
         versionCode = 72
@@ -74,7 +74,7 @@ android {
         getByName("debug") {
             isDebuggable = true
             applicationIdSuffix = ".debug"
-            resValue("string", "app_name", "LibreTube Debug")
+            resValue("string", "app_name", "RootTube Debug")
         }
     }
 

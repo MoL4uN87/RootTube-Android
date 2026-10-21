@@ -1,3 +1,15 @@
+# RootTube Android
+
+RootTube Test 001 - Android-приложение на основе LibreTube 32.1.
+
+Проверено на Samsung Galaxy S26 Ultra.
+
+Исходный проект: https://github.com/libre-tube/LibreTube
+
+Лицензия: GPL-3.0. Авторские права оригинальных разработчиков сохраняются.
+
+---
+
 <div align="center">
   <img src="assets/banners/gh-banner.png" width="auto" height="auto" alt="LibreTube">
 
