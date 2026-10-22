@@ -3,6 +3,12 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <item
+        android:id="@+id/action_roottube_vpn"
+        android:title="@string/roottube_vpn_title"
+        app:actionLayout="@layout/action_roottube_vpn"
+        app:showAsAction="always" />
+
+    <item
         android:id="@+id/action_search"
         android:focusableInTouchMode="true"
         android:icon="@drawable/ic_search"

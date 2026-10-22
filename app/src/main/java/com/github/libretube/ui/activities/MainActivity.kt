@@ -357,6 +357,23 @@ class MainActivity : AbstractPlayerHostActivity() {
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         // Inflate the menu; this adds items to the action bar if it is present.
         menuInflater.inflate(R.menu.action_bar, menu)
+        // RootTube: VPN information shortcut, placed immediately before Search.
+        menu.findItem(R.id.action_roottube_vpn).actionView?.setOnClickListener {
+            MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.roottube_vpn_title)
+                .setMessage(R.string.roottube_vpn_description)
+                .setPositiveButton(R.string.roottube_vpn_telegram) { _, _ ->
+                    IntentHelper.openLinkFromHref(
+                        this,
+                        supportFragmentManager,
+                        "https://t.me/vladimir_russia",
+                        forceDefaultOpen = true
+                    )
+                }
+                .setNegativeButton(R.string.cancel, null)
+                .show()
+        }
+
 
         // stuff for the search in the topBar
         val searchItem = menu.findItem(R.id.action_search)

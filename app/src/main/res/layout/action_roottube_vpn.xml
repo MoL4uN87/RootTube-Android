@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/roottube_vpn_button"
+    android:layout_width="56dp"
+    android:layout_height="match_parent"
+    android:minHeight="48dp"
+    android:gravity="center"
+    android:background="?attr/selectableItemBackgroundBorderless"
+    android:clickable="true"
+    android:focusable="true"
+    android:text="@string/roottube_vpn_title"
+    android:contentDescription="@string/roottube_vpn_title"
+    android:textColor="?android:attr/textColorPrimary"
+    android:textStyle="bold"
+    android:textSize="14sp" />

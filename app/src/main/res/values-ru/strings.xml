@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="roottube_vpn_description">Информация о VPN и поддержке проекта. Кнопка открывает Telegram, но не подключает VPN автоматически.</string>
+    <string name="roottube_vpn_telegram">Открыть в Telegram</string>
+
     <string name="yes">Да</string>
     <string name="search_hint">Поиск</string>
     <string name="subscribe">Подписаться</string>

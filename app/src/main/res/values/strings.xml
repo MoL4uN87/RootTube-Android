@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="roottube_vpn_title" translatable="false">VPN</string>
+    <string name="roottube_vpn_description">VPN connection information and project support. This button opens Telegram; it does not connect to a VPN automatically.</string>
+    <string name="roottube_vpn_telegram">Open in Telegram</string>
+
     <string name="app_name" translatable="false">RootTube</string>
     <string name="startpage">Home</string>
     <string name="subscriptions">Subscriptions</string>
