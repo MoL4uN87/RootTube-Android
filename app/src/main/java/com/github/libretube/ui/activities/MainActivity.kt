@@ -63,7 +63,6 @@ import com.github.libretube.ui.models.SearchViewModel
 import com.github.libretube.ui.models.SubscriptionsViewModel
 import com.github.libretube.ui.preferences.BackupRestoreSettings
 import com.github.libretube.ui.preferences.BackupRestoreSettings.Companion.FILETYPE_ANY
-import com.github.libretube.util.UpdateChecker
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.navigation.NavigationBarMenuView
 import kotlinx.coroutines.Dispatchers
@@ -179,12 +178,6 @@ class MainActivity : AbstractPlayerHostActivity() {
             binding.root.scene.setTransition(transition)
         }
 
-        // Check update automatically
-        if (PreferenceHelper.getBoolean(PreferenceKeys.AUTOMATIC_UPDATE_CHECKS, false)) {
-            lifecycleScope.launch(Dispatchers.IO) {
-                UpdateChecker(this@MainActivity).checkUpdate(false)
-            }
-        }
 
         // set the action bar for the activity
         setSupportActionBar(binding.toolbar)
@@ -357,21 +350,32 @@ class MainActivity : AbstractPlayerHostActivity() {
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         // Inflate the menu; this adds items to the action bar if it is present.
         menuInflater.inflate(R.menu.action_bar, menu)
-        // RootTube: VPN information shortcut, placed immediately before Search.
+        // RootTube: Telegram and Threads links inside the VPN information dialog.
         menu.findItem(R.id.action_roottube_vpn).actionView?.setOnClickListener {
-            MaterialAlertDialogBuilder(this)
+            val vpnDialog = MaterialAlertDialogBuilder(this)
                 .setTitle(R.string.roottube_vpn_title)
                 .setMessage(R.string.roottube_vpn_description)
-                .setPositiveButton(R.string.roottube_vpn_telegram) { _, _ ->
-                    IntentHelper.openLinkFromHref(
-                        this,
-                        supportFragmentManager,
-                        "https://t.me/vladimir_russia",
-                        forceDefaultOpen = true
-                    )
-                }
+                .setView(R.layout.dialog_roottube_vpn)
                 .setNegativeButton(R.string.cancel, null)
                 .show()
+            vpnDialog.findViewById<View>(R.id.roottube_vpn_telegram)?.setOnClickListener {
+                vpnDialog.dismiss()
+                IntentHelper.openLinkFromHref(
+                    this,
+                    supportFragmentManager,
+                    "https://t.me/vladimir_russia",
+                    forceDefaultOpen = true
+                )
+            }
+            vpnDialog.findViewById<View>(R.id.roottube_vpn_threads)?.setOnClickListener {
+                vpnDialog.dismiss()
+                IntentHelper.openLinkFromHref(
+                    this,
+                    supportFragmentManager,
+                    "https://www.threads.com/@vpn_russia_100rub",
+                    forceDefaultOpen = true
+                )
+            }
         }
 
 
