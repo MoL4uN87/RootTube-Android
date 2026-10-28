@@ -111,6 +111,7 @@ import com.github.libretube.util.PlayingQueue
 import com.github.libretube.util.TextUtils
 import com.github.libretube.util.TextUtils.toTimeInSeconds
 import com.google.android.material.snackbar.Snackbar
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -133,6 +134,7 @@ class PlayerFragment : Fragment(R.layout.fragment_player), CustomPlayerCallback 
     private val commentsViewModel: CommentsViewModel by activityViewModels()
     private val chaptersViewModel: ChaptersViewModel by activityViewModels()
     private lateinit var playerController: MediaController
+    private var votConsentGivenForSession = false
 
     // Video information passed by the intent
     private lateinit var videoId: String
@@ -421,6 +423,7 @@ class PlayerFragment : Fragment(R.layout.fragment_player), CustomPlayerCallback 
         val playerData = requireArguments().parcelable<PlayerData>(IntentData.playerData)!!
         playerData.videoId?.let { videoId = it }
         isOffline = playerData.isOffline
+        binding.relPlayerTranslate.isVisible = !isOffline
         playlistId = playerData.playlistId
         channelId = playerData.channelId
 
@@ -692,6 +695,37 @@ class PlayerFragment : Fragment(R.layout.fragment_player), CustomPlayerCallback 
             CommentsSheet()
                 .apply { arguments = bundleOf(IntentData.channelAvatar to streams.uploaderAvatar) }
                 .show(childFragmentManager)
+        }
+
+
+        // Explicit notice before sending a YouTube video URL to the unofficial
+        // Yandex VOT backend or its community-operated relay hosts.
+        binding.relPlayerTranslate.setOnClickListener {
+            if (!::playerController.isInitialized) return@setOnClickListener
+            val toggle = {
+                playerController.sendCustomCommand(
+                    AbstractPlayerService.runPlayerActionCommand,
+                    bundleOf(PlayerCommand.TOGGLE_VOT_TRANSLATION.name to true)
+                )
+            }
+            if (votConsentGivenForSession) {
+                toggle()
+            } else {
+                MaterialAlertDialogBuilder(requireContext())
+                    .setTitle("Экспериментальный AI-перевод")
+                    .setMessage(
+                        "Ссылка на текущее видео будет передана сервису " +
+                            "Яндекс VOT или стороннему серверу-посреднику VOT. " +
+                            "Это неофициальная интеграция; доступность не гарантируется. " +
+                            "Нажми кнопку ещё раз, чтобы отключить перевод."
+                    )
+                    .setNegativeButton("Отмена", null)
+                    .setPositiveButton("Включить") { _, _ ->
+                        votConsentGivenForSession = true
+                        toggle()
+                    }
+                    .show()
+            }
         }
 
         // share button
