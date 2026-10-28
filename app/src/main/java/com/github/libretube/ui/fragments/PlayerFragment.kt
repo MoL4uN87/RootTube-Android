@@ -423,7 +423,7 @@ class PlayerFragment : Fragment(R.layout.fragment_player), CustomPlayerCallback 
         val playerData = requireArguments().parcelable<PlayerData>(IntentData.playerData)!!
         playerData.videoId?.let { videoId = it }
         isOffline = playerData.isOffline
-        binding.relPlayerTranslate.isVisible = !isOffline
+        binding.relPlayerTranslate?.let { it.isVisible = !isOffline }
         playlistId = playerData.playlistId
         channelId = playerData.channelId
 
@@ -700,7 +700,7 @@ class PlayerFragment : Fragment(R.layout.fragment_player), CustomPlayerCallback 
 
         // Explicit notice before sending a YouTube video URL to the unofficial
         // Yandex VOT backend or its community-operated relay hosts.
-        binding.relPlayerTranslate.setOnClickListener {
+        binding.relPlayerTranslate?.setOnClickListener {
             if (!::playerController.isInitialized) return@setOnClickListener
             val toggle = {
                 playerController.sendCustomCommand(
