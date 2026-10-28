@@ -10,6 +10,10 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaItem.SubtitleConfiguration
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
+import com.github.libretube.enums.PlayerCommand
+import com.github.libretube.voiceover.VotClient
+import com.github.libretube.voiceover.VoiceoverOverlay
+import kotlinx.coroutines.CancellationException
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.MediaSource
@@ -66,6 +70,75 @@ open class OnlinePlayerService : AbstractPlayerService() {
     private var streams: Streams? = null
 
     private val scope = CoroutineScope(Dispatchers.Main)
+
+    private val votClient = VotClient()
+    private var votJob: Job? = null
+    private var voiceoverOverlay: VoiceoverOverlay? = null
+    private var votSerial = 0
+
+    override fun runPlayerCommand(args: Bundle) {
+        if (args.containsKey(PlayerCommand.TOGGLE_VOT_TRANSLATION.name)) {
+            toggleVotTranslation()
+        } else {
+            super.runPlayerCommand(args)
+        }
+    }
+
+    private fun clearVotTranslation() {
+        votSerial++
+        votJob?.cancel()
+        votJob = null
+        voiceoverOverlay?.release()
+        voiceoverOverlay = null
+    }
+
+    private fun toggleVotTranslation() {
+        if (voiceoverOverlay != null || votJob?.isActive == true) {
+            clearVotTranslation()
+            toastFromMainThread("AI-перевод отключён")
+            return
+        }
+
+        val video = streams
+        if (video == null || video.isLive) {
+            toastFromMainThread("AI-перевод доступен только для обычных онлайн-видео")
+            return
+        }
+
+        val requestedId = videoId
+        val serial = ++votSerial
+        votJob = scope.launch {
+            try {
+                toastFromMainThread("Запрашиваем русскую AI-озвучку…")
+                val audioUrl = votClient.translate(
+                    videoId = requestedId,
+                    durationSeconds = video.duration.toDouble(),
+                    title = video.title
+                )
+                if (serial != votSerial || requestedId != videoId) return@launch
+                val currentPlayer = exoPlayer ?: return@launch
+                voiceoverOverlay = VoiceoverOverlay(
+                    this@OnlinePlayerService, currentPlayer, scope
+                ).apply { play(audioUrl) }
+                toastFromMainThread("Русская AI-озвучка подключена")
+            } catch (cancel: CancellationException) {
+                throw cancel
+            } catch (error: Exception) {
+                if (serial == votSerial) {
+                    Log.w("RootTube-VOT", "AI translation failed: ${error.message}")
+                    toastFromMainThread("Перевод не готов: ${error.message ?: "ошибка сервера"}")
+                }
+            } finally {
+                if (serial == votSerial) votJob = null
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        clearVotTranslation()
+        super.onDestroy()
+    }
+
 
     /*
     Current job that's loading a new video (the value is null if no video is loading at the moment).
@@ -126,6 +199,7 @@ open class OnlinePlayerService : AbstractPlayerService() {
     }
 
     override suspend fun startPlayback() {
+        clearVotTranslation()
         super.startPlayback()
 
         val timestampMs = startTimestampSeconds?.times(1000) ?: 0L
