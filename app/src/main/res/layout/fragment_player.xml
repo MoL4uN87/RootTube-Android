@@ -43,6 +43,13 @@
                     android:orientation="horizontal"
                     android:paddingHorizontal="2dp">
 
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/relPlayer_translate"
+                        style="@style/PlayerActionsButton"
+                        android:text="AI-перевод"
+                        app:icon="@drawable/ic_headphones" />
+
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/relPlayer_share"
                         style="@style/PlayerActionsButton"
