@@ -96,7 +96,7 @@ internal object SabrAudioFallback {
                 error("SABR segment count invalid: $lastSegment")
             }
 
-            var playbackMs = 0L
+            var nextSegmentStartMs = 0L
             val buffered = ArrayList<Long>()
             for (sequence in 1L..lastSegment) {
                 currentCoroutineContext().ensureActive()
@@ -113,13 +113,19 @@ internal object SabrAudioFallback {
                     if (SystemClock.elapsedRealtime() - begin > TIME_BUDGET_MS) {
                         error("SABR audio exceeded time budget")
                     }
+                    // SABR distinguishes current playback time from the start
+                    // time of the chunk being loaded. A downloader must keep a
+                    // small simulated buffer ahead of the virtual playback clock,
+                    // just as the interactive player does.
+                    val virtualPlaybackMs = (nextSegmentStartMs - 3_000L)
+                        .coerceAtLeast(0L)
                     segment = client.getNextSegment(
                         PlaybackRequest(
                             format = format,
-                            playerPosition = playbackMs,
+                            playerPosition = virtualPlaybackMs,
                             playbackSpeed = 1.0f,
                             segment = sequence,
-                            segmentStartTimeMs = playbackMs,
+                            segmentStartTimeMs = nextSegmentStartMs,
                             bufferedSegments = buffered
                         ),
                         preservePrefetchedSegments = true
@@ -137,12 +143,16 @@ internal object SabrAudioFallback {
                 }
                 if (!append(chunk.data)) error("SABR audio exceeds $maxBytes bytes")
                 buffered.add(sequence)
-                playbackMs = (chunk.header.startMs + chunk.duration)
-                    .coerceAtLeast(playbackMs + 1L)
-                if (sequence == 1L || sequence % 10L == 0L || sequence == lastSegment) {
+                // Do not claim that already played segments remain buffered.
+                // The normal player periodically discards consumed chunks.
+                while (buffered.size > 3) buffered.removeAt(0)
+                nextSegmentStartMs = (chunk.header.startMs + chunk.duration)
+                    .coerceAtLeast(nextSegmentStartMs + 1L)
+                if (sequence == 1L || sequence % 4L == 0L || sequence == lastSegment) {
                     Log.i(
                         TAG,
-                        "sourceAudio SABR progress segment=$sequence/$lastSegment bytes=${output.size()}"
+                        "sourceAudio SABR progress segment=$sequence/$lastSegment " +
+                            "bytes=${output.size()} nextMs=$nextSegmentStartMs"
                     )
                 }
             }
