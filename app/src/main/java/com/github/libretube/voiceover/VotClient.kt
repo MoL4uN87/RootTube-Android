@@ -129,65 +129,99 @@ internal class VotClient(private val cacheDir: File? = null) {
         }
     }
 
+    private fun trustedMediaUrl(url: okhttp3.HttpUrl): Boolean {
+        if (!url.isHttps || url.port != 443 ||
+            url.username.isNotEmpty() || url.password.isNotEmpty()) return false
+        val name = url.host.lowercase()
+        return name == "googlevideo.com" || name.endsWith(".googlevideo.com") ||
+            name == "youtube.com" || name.endsWith(".youtube.com")
+    }
+
     private fun sourceAudioBytes(sourceUrl: String?, maxBytes: Int = MAX_AUDIO_BYTES): ByteArray? {
-        val parsed = sourceUrl?.toHttpUrlOrNull()
-        if (parsed == null || !parsed.isHttps) {
-            Log.i("RootTube-VOT", "sourceAudio unavailable: no direct HTTPS audio URL")
-            return null
-        }
-        // Never let untrusted metadata request arbitrary or private hosts.
-        val domain = parsed.host.lowercase()
-        if (!(domain == "googlevideo.com" || domain.endsWith(".googlevideo.com") ||
-                domain == "youtube.com" || domain.endsWith(".youtube.com"))) {
-            Log.i("RootTube-VOT", "sourceAudio unavailable: URL not from a permitted media host")
+        var mediaUrl = sourceUrl?.toHttpUrlOrNull()
+        if (mediaUrl == null || !trustedMediaUrl(mediaUrl)) {
+            Log.i("RootTube-VOT", "sourceAudio unavailable: missing or untrusted HTTPS URL")
             return null
         }
 
         return try {
-            val req = Request.Builder().url(parsed).header("User-Agent", USER_AGENT).build()
-            client.newBuilder()
+            // Media endpoints often return 302 to a signed Googlevideo CDN URL.
+            // Follow only a few HTTPS redirects and revalidate EVERY destination
+            // to avoid forwarding requests to arbitrary hosts.
+            val downloader = client.newBuilder()
                 .followRedirects(false)
-                .callTimeout(20, TimeUnit.SECONDS)
+                .followSslRedirects(false)
+                .callTimeout(25, TimeUnit.SECONDS)
                 .build()
-                .newCall(req).execute().use { response ->
-                if (!response.isSuccessful) {
-                    Log.i("RootTube-VOT", "sourceAudio download HTTP ${response.code}")
-                    return null
-                }
-                val body = response.body
-                // Never upload the truncated beginning of a longer WebM/M4A
-                // stream as if it were a complete audio container.
-                if (body.contentLength() > maxBytes) {
-                    Log.i("RootTube-VOT", "sourceAudio too large: ${body.contentLength()} bytes; using VOT fallback")
-                    return null
-                }
 
-                val output = ByteArrayOutputStream()
-                val buffer = ByteArray(32 * 1024)
-                body.byteStream().use { source ->
-                    while (output.size() <= maxBytes) {
-                        val n = source.read(
-                            buffer,
-                            0,
-                            minOf(buffer.size, maxBytes + 1 - output.size())
+            for (redirectIndex in 0..4) {
+                val request = Request.Builder()
+                    .url(mediaUrl!!)
+                    .header("User-Agent", USER_AGENT)
+                    .build()
+                downloader.newCall(request).execute().use { response ->
+                    if (response.code in 300..399) {
+                        val location = response.header("Location")
+                        val target = location?.let { response.request.url.resolve(it) }
+                        if (target == null || !trustedMediaUrl(target)) {
+                            Log.w(
+                                "RootTube-VOT",
+                                "sourceAudio redirect blocked: status=${response.code} " +
+                                    "targetHost=${target?.host ?: "missing"}"
+                            )
+                            return null
+                        }
+                        Log.i(
+                            "RootTube-VOT",
+                            "sourceAudio redirect=${redirectIndex + 1} HTTP ${response.code} " +
+                                "from=${mediaUrl!!.host} to=${target.host}"
                         )
-                        if (n < 0) break
-                        if (n > 0) output.write(buffer, 0, n)
-                    }
-                }
-                if (output.size() > maxBytes) {
-                    Log.i("RootTube-VOT", "sourceAudio exceeds $maxBytes byte cap; using VOT fallback")
-                    null
-                } else {
-                    output.toByteArray().takeIf { it.isNotEmpty() }?.also {
-                        Log.i("RootTube-VOT", "sourceAudio downloaded completely: ${it.size} bytes")
+                        mediaUrl = target
+                    } else {
+                        if (!response.isSuccessful) {
+                            Log.i("RootTube-VOT", "sourceAudio download HTTP ${response.code}")
+                            return null
+                        }
+                        val body = response.body
+                        if (body.contentLength() > maxBytes) {
+                            Log.i(
+                                "RootTube-VOT",
+                                "sourceAudio too large: ${body.contentLength()} bytes"
+                            )
+                            return null
+                        }
+
+                        val output = ByteArrayOutputStream()
+                        val buffer = ByteArray(32 * 1024)
+                        body.byteStream().use { input ->
+                            while (output.size() <= maxBytes) {
+                                val count = input.read(
+                                    buffer, 0, minOf(buffer.size, maxBytes + 1 - output.size())
+                                )
+                                if (count < 0) break
+                                if (count > 0) output.write(buffer, 0, count)
+                            }
+                        }
+                        if (output.size() > maxBytes) {
+                            Log.i("RootTube-VOT", "sourceAudio exceeds $maxBytes byte cap")
+                            return null
+                        }
+                        return output.toByteArray().takeIf { it.isNotEmpty() }?.also {
+                            Log.i("RootTube-VOT", "sourceAudio downloaded completely: ${it.size} bytes")
+                        }
                     }
                 }
             }
+            Log.w("RootTube-VOT", "sourceAudio redirect limit exceeded")
+            null
         } catch (cancel: CancellationException) {
             throw cancel
         } catch (error: Exception) {
-            Log.i("RootTube-VOT", "sourceAudio download failed: ${error.javaClass.simpleName}")
+            Log.i(
+                "RootTube-VOT",
+                "sourceAudio download failed: ${error.javaClass.simpleName} " +
+                    "${error.message?.take(90)}"
+            )
             null
         }
     }
