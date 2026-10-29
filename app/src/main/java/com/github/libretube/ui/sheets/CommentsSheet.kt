@@ -7,6 +7,7 @@ import androidx.activity.ComponentDialog
 import androidx.activity.addCallback
 import androidx.core.view.isVisible
 import androidx.fragment.app.activityViewModels
+import androidx.fragment.app.viewModels
 import androidx.fragment.app.commit
 import androidx.fragment.app.replace
 import androidx.fragment.app.setFragmentResult
@@ -14,12 +15,14 @@ import com.github.libretube.R
 import com.github.libretube.databinding.CommentsSheetBinding
 import com.github.libretube.ui.fragments.CommentsMainFragment
 import com.github.libretube.ui.models.CommonPlayerViewModel
+import com.github.libretube.ui.models.CommentsTranslationViewModel
 
 class CommentsSheet : ExpandablePlayerSheet(R.layout.comments_sheet) {
     private var _binding: CommentsSheetBinding? = null
     val binding get() = _binding!!
 
     private val commonPlayerViewModel: CommonPlayerViewModel by activityViewModels()
+    private val commentTranslations: CommentsTranslationViewModel by viewModels()
 
     private val backPressedCallback by lazy(LazyThreadSafetyMode.NONE) {
         (dialog as ComponentDialog?)?.onBackPressedDispatcher?.addCallback(owner = viewLifecycleOwner, enabled = false) {
@@ -49,6 +52,18 @@ class CommentsSheet : ExpandablePlayerSheet(R.layout.comments_sheet) {
         }
 
         binding.btnClose.setOnClickListener { dismiss() }
+
+        binding.btnTranslateComments.setOnClickListener { commentTranslations.toggle() }
+        commentTranslations.enabled.observe(viewLifecycleOwner) { translated ->
+            binding.btnTranslateComments.text = getString(
+                if (translated) R.string.comments_translate_original
+                else R.string.comments_translate_ru
+            )
+            binding.btnTranslateComments.tooltipText = getString(
+                if (translated) R.string.comments_translate_original_tooltip
+                else R.string.comments_translate_tooltip
+            )
+        }
 
         childFragmentManager.commit {
             replace<CommentsMainFragment>(R.id.commentFragContainer, args = arguments)
