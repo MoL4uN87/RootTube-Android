@@ -56,13 +56,19 @@ internal class VideoBriefClient {
         // VOT can provide already translated subtitles for some English videos.
         if (captions.size < MIN_CUES) {
             currentCoroutineContext().ensureActive()
-            runCatching { VotClient().russianSubtitles(videoId) }.getOrNull()?.let { raw ->
-                val parsed = parse(raw)
-                if (parsed.size >= MIN_CUES) {
-                    captions = parsed
-                    source = "русские субтитры VOT"
-                    isRussian = true
+            try {
+                VotClient().russianSubtitles(videoId)?.let { raw ->
+                    val parsed = parse(raw)
+                    if (parsed.size >= MIN_CUES) {
+                        captions = parsed
+                        source = "русские субтитры VOT"
+                        isRussian = true
+                    }
                 }
+            } catch (cancel: CancellationException) {
+                throw cancel
+            } catch (_: Exception) {
+                // VOT subtitles are optional; normal YouTube tracks are next.
             }
         }
 
