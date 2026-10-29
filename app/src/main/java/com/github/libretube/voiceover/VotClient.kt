@@ -226,11 +226,12 @@ internal class VotClient(private val cacheDir: File? = null) {
         }
     }
 
-    private fun provideSourceAudio(
+    private suspend fun provideSourceAudio(
         url: String,
         videoId: String,
         translationId: String,
         directAudioCandidates: List<AudioSource>,
+        sabrAudioProvider: (suspend () -> ByteArray?)?,
         active: Session,
         onProgress: (String) -> Unit
     ) {
@@ -257,34 +258,51 @@ internal class VotClient(private val cacheDir: File? = null) {
 
         Log.i("RootTube-VOT", "stage=sourceAudio download-started host=$host")
         var audio: ByteArray? = null
-        for ((index, candidate) in directAudioCandidates.take(4).withIndex()) {
-            Log.i(
-                "RootTube-VOT",
-                "stage=sourceAudio trying candidate=${index + 1} " +
-                    "mime=${candidate.mimeType ?: "unknown"} " +
-                    "codec=${candidate.codec ?: "unknown"} bytes=${candidate.contentLength}"
-            )
-            val raw = sourceAudioBytes(candidate.url) ?: continue
-            // EBML marker identifies actual WebM data; metadata alone can be wrong.
-            val isWebm = raw.size >= 4 &&
-                (raw[0].toInt() and 255) == 0x1A &&
-                (raw[1].toInt() and 255) == 0x45 &&
-                (raw[2].toInt() and 255) == 0xDF &&
-                (raw[3].toInt() and 255) == 0xA3
-            audio = if (isWebm) {
-                Log.i("RootTube-VOT", "stage=sourceAudio native-WebM no conversion needed")
-                raw
-            } else {
-                Log.i("RootTube-VOT", "stage=sourceAudio conversion=WebM/Opus started")
-                cacheDir?.let {
-                    VotAudioTranscoder.convertToWebmOpus(raw, it, MAX_AUDIO_BYTES)
+        if (sabrAudioProvider != null) {
+            onProgress("Получаем исходное аудио через потоковый сервер…")
+            Log.i("RootTube-VOT", "stage=sourceAudio SABR attempting")
+            try {
+                audio = sabrAudioProvider()
+            } catch (cancel: CancellationException) {
+                throw cancel
+            } catch (error: Exception) {
+                Log.w(
+                    "RootTube-VOT",
+                    "stage=sourceAudio SABR exception=${error.javaClass.simpleName}"
+                )
+            }
+        }
+        if (audio == null) {
+            for ((index, candidate) in directAudioCandidates.take(4).withIndex()) {
+                currentCoroutineContext().ensureActive()
+                Log.i(
+                    "RootTube-VOT",
+                    "stage=sourceAudio trying candidate=${index + 1} " +
+                        "mime=${candidate.mimeType ?: "unknown"} " +
+                        "codec=${candidate.codec ?: "unknown"} bytes=${candidate.contentLength}"
+                )
+                val raw = sourceAudioBytes(candidate.url) ?: continue
+                // EBML marker identifies actual WebM data; metadata alone can be wrong.
+                val isWebm = raw.size >= 4 &&
+                    (raw[0].toInt() and 255) == 0x1A &&
+                    (raw[1].toInt() and 255) == 0x45 &&
+                    (raw[2].toInt() and 255) == 0xDF &&
+                    (raw[3].toInt() and 255) == 0xA3
+                audio = if (isWebm) {
+                    Log.i("RootTube-VOT", "stage=sourceAudio native-WebM no conversion needed")
+                    raw
+                } else {
+                    Log.i("RootTube-VOT", "stage=sourceAudio conversion=WebM/Opus started")
+                    cacheDir?.let {
+                        VotAudioTranscoder.convertToWebmOpus(raw, it, MAX_AUDIO_BYTES)
+                    }
                 }
+                if (audio != null) {
+                    Log.i("RootTube-VOT", "stage=sourceAudio selected candidate=${index + 1}")
+                    break
+                }
+                Log.i("RootTube-VOT", "stage=sourceAudio candidate=${index + 1} unusable")
             }
-            if (audio != null) {
-                Log.i("RootTube-VOT", "stage=sourceAudio selected candidate=${index + 1}")
-                break
-            }
-            Log.i("RootTube-VOT", "stage=sourceAudio candidate=${index + 1} unusable")
         }
         Log.i("RootTube-VOT", "stage=sourceAudio download-finished bytes=${audio?.size ?: 0}")
         onProgress(if (audio == null) "Пробуем запасной способ перевода…" else
@@ -395,6 +413,7 @@ internal class VotClient(private val cacheDir: File? = null) {
         durationSeconds: Double,
         title: String,
         directAudioCandidates: List<AudioSource> = emptyList(),
+        sabrAudioProvider: (suspend () -> ByteArray?)? = null,
         onProgress: (String) -> Unit = {}
     ): String = withContext(Dispatchers.IO) {
         require(Regex("^[a-zA-Z0-9_-]{11}$").matches(videoId)) {
@@ -436,7 +455,8 @@ internal class VotClient(private val cacheDir: File? = null) {
                         // Set the flag only once the server has accepted the audio PUT.
                         onProgress("Сервер запросил исходное аудио…")
                         provideSourceAudio(
-                            videoUrl, videoId, translationId, directAudioCandidates, active, onProgress
+                            videoUrl, videoId, translationId, directAudioCandidates,
+                            sabrAudioProvider, active, onProgress
                         )
                         audioSent = true
                         stuckCounter = 0
