@@ -4,6 +4,7 @@ import android.util.Base64
 import android.util.Log
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.io.ByteArrayOutputStream
+import java.io.File
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -27,7 +28,16 @@ import javax.crypto.spec.SecretKeySpec
  * Proxies are opt-in via the RootTube UI. Video URLs are sent to the selected VOT host.
  * Never attach YouTube credentials/cookies to these requests.
  */
-internal class VotClient {
+internal class VotClient(private val cacheDir: File? = null) {
+    data class AudioSource(
+        val url: String,
+        val mimeType: String?,
+        val codec: String?,
+        val contentLength: Long,
+        val language: String?
+    )
+
+
     private val client = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
@@ -186,7 +196,7 @@ internal class VotClient {
         url: String,
         videoId: String,
         translationId: String,
-        directAudioUrls: List<String>,
+        directAudioCandidates: List<AudioSource>,
         active: Session,
         onProgress: (String) -> Unit
     ) {
@@ -213,13 +223,34 @@ internal class VotClient {
 
         Log.i("RootTube-VOT", "stage=sourceAudio download-started host=$host")
         var audio: ByteArray? = null
-        for ((index, url) in directAudioUrls.take(4).withIndex()) {
-            Log.i("RootTube-VOT", "stage=sourceAudio trying candidate=${index + 1}")
-            audio = sourceAudioBytes(url)
+        for ((index, candidate) in directAudioCandidates.take(4).withIndex()) {
+            Log.i(
+                "RootTube-VOT",
+                "stage=sourceAudio trying candidate=${index + 1} " +
+                    "mime=${candidate.mimeType ?: "unknown"} " +
+                    "codec=${candidate.codec ?: "unknown"} bytes=${candidate.contentLength}"
+            )
+            val raw = sourceAudioBytes(candidate.url) ?: continue
+            // EBML marker identifies actual WebM data; metadata alone can be wrong.
+            val isWebm = raw.size >= 4 &&
+                (raw[0].toInt() and 255) == 0x1A &&
+                (raw[1].toInt() and 255) == 0x45 &&
+                (raw[2].toInt() and 255) == 0xDF &&
+                (raw[3].toInt() and 255) == 0xA3
+            audio = if (isWebm) {
+                Log.i("RootTube-VOT", "stage=sourceAudio native-WebM no conversion needed")
+                raw
+            } else {
+                Log.i("RootTube-VOT", "stage=sourceAudio conversion=WebM/Opus started")
+                cacheDir?.let {
+                    VotAudioTranscoder.convertToWebmOpus(raw, it, MAX_AUDIO_BYTES)
+                }
+            }
             if (audio != null) {
                 Log.i("RootTube-VOT", "stage=sourceAudio selected candidate=${index + 1}")
                 break
             }
+            Log.i("RootTube-VOT", "stage=sourceAudio candidate=${index + 1} unusable")
         }
         Log.i("RootTube-VOT", "stage=sourceAudio download-finished bytes=${audio?.size ?: 0}")
         onProgress(if (audio == null) "Пробуем запасной способ перевода…" else
@@ -329,7 +360,7 @@ internal class VotClient {
         videoId: String,
         durationSeconds: Double,
         title: String,
-        directAudioUrls: List<String> = emptyList(),
+        directAudioCandidates: List<AudioSource> = emptyList(),
         onProgress: (String) -> Unit = {}
     ): String = withContext(Dispatchers.IO) {
         require(Regex("^[a-zA-Z0-9_-]{11}$").matches(videoId)) {
@@ -371,7 +402,7 @@ internal class VotClient {
                         // Set the flag only once the server has accepted the audio PUT.
                         onProgress("Сервер запросил исходное аудио…")
                         provideSourceAudio(
-                            videoUrl, videoId, translationId, directAudioUrls, active, onProgress
+                            videoUrl, videoId, translationId, directAudioCandidates, active, onProgress
                         )
                         audioSent = true
                         stuckCounter = 0
