@@ -53,6 +53,19 @@
                     tools:text="Comments (1000)" />
 
                 <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnTranslateComments"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="36dp"
+                    android:layout_marginEnd="4dp"
+                    android:minWidth="48dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:text="@string/comments_translate_ru"
+                    android:textAllCaps="false"
+                    android:tooltipText="@string/comments_translate_tooltip" />
+
+                <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnScrollToTop"
                     style="@style/Widget.Material3Expressive.Button.IconButton.Tonal"
                     android:backgroundTint="?colorSurfaceContainerLow"
