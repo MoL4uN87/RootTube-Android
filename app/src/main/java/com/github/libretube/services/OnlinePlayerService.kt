@@ -123,12 +123,23 @@ open class OnlinePlayerService : AbstractPlayerService() {
                 // Prefer the English source track when YouTube provides one.
                 // The VOT client only downloads bounded HTTPS media from
                 // known YouTube media hosts and never forwards account cookies.
-                val originalAudio = video.audioStreams.firstOrNull {
-                    it.audioTrackLocale?.startsWith("en", ignoreCase = true) == true &&
-                        !it.url.isNullOrBlank()
-                }?.url ?: video.audioStreams.firstOrNull {
-                    !it.url.isNullOrBlank()
-                }?.url
+                val originalTrack = video.audioStreams
+                    .filter { !it.url.isNullOrBlank() }
+                    .sortedWith(compareBy(
+                        { if (it.audioTrackLocale?.startsWith("en", ignoreCase = true) == true) 0 else 1 },
+                        { if (it.mimeType?.contains("webm", ignoreCase = true) == true) 0 else 1 },
+                        { if (it.contentLength in 1..(10L * 1024 * 1024)) 0 else 1 },
+                        { if (it.contentLength > 0) it.contentLength else Long.MAX_VALUE }
+                    ))
+                    .firstOrNull()
+                val originalAudio = originalTrack?.url
+                Log.i(
+                    "RootTube-VOT",
+                    "selected audio: mime=${originalTrack?.mimeType ?: "unknown"} " +
+                        "codec=${originalTrack?.codec ?: "unknown"} " +
+                        "length=${originalTrack?.contentLength ?: -1} " +
+                        "language=${originalTrack?.audioTrackLocale ?: "unknown"}"
+                )
                 var lastProgress = ""
                 val audioUrl = VotClient().translate(
                     videoId = requestedId,
