@@ -858,8 +858,8 @@ class PlayerFragment : Fragment(R.layout.fragment_player), CustomPlayerCallback 
             }
         }
 
-        originalSlider.value = VoiceoverVolumeSettings.original(context) * 100f
-        translatedSlider.value = VoiceoverVolumeSettings.translated(context) * 100f
+        originalSlider.value = VoiceoverVolumeSettings.original(context).times(100f).toInt().toFloat()
+        translatedSlider.value = VoiceoverVolumeSettings.translated(context).times(100f).toInt().toFloat()
         originalValue.text = "${originalSlider.value.toInt()}%"
         translatedValue.text = "${translatedSlider.value.toInt()}%"
 
