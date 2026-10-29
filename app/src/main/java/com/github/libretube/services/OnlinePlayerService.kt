@@ -109,10 +109,27 @@ open class OnlinePlayerService : AbstractPlayerService() {
         votJob = scope.launch {
             try {
                 toastFromMainThread("Запрашиваем русскую AI-озвучку…")
+                // Prefer the English source track when YouTube provides one.
+                // The VOT client only downloads bounded HTTPS media from
+                // known YouTube media hosts and never forwards account cookies.
+                val originalAudio = video.audioStreams.firstOrNull {
+                    it.audioTrackLocale?.startsWith("en", ignoreCase = true) == true &&
+                        !it.url.isNullOrBlank()
+                }?.url ?: video.audioStreams.firstOrNull {
+                    !it.url.isNullOrBlank()
+                }?.url
+                var lastProgress = ""
                 val audioUrl = VotClient().translate(
                     videoId = requestedId,
                     durationSeconds = video.duration.toDouble(),
-                    title = video.title
+                    title = video.title,
+                    directAudioUrl = originalAudio,
+                    onProgress = { status ->
+                        if (serial == votSerial && status != lastProgress) {
+                            lastProgress = status
+                            toastFromMainThread(status)
+                        }
+                    }
                 )
                 if (serial != votSerial || requestedId != videoId) return@launch
                 val currentPlayer = exoPlayer ?: return@launch
