@@ -18,6 +18,7 @@ import com.github.libretube.helpers.ImageHelper
 import com.github.libretube.helpers.ThemeHelper
 import com.github.libretube.ui.adapters.callbacks.DiffUtilItemCallback
 import com.github.libretube.ui.viewholders.CommentViewHolder
+import com.github.libretube.ui.models.CommentsTranslationViewModel
 import com.github.libretube.util.HtmlParser
 import com.github.libretube.util.LinkHandler
 import com.github.libretube.util.TextUtils
@@ -25,6 +26,7 @@ import com.github.libretube.util.TextUtils
 class CommentsPagingAdapter(
     private val isReplies: Boolean,
     private val channelAvatar: String?,
+    private val commentTranslations: CommentsTranslationViewModel,
     private val handleLink: (url: String) -> Unit,
     private val saveToClipboard: (Comment) -> Unit,
     private val navigateToChannel: (Comment) -> Unit,
@@ -60,8 +62,27 @@ class CommentsPagingAdapter(
                 clickEventConsumedByLinkHandler = true
                 handleLink.invoke(it)
             }
-            commentText.text = comment.commentText?.replace("</a>", "</a> ")
-                ?.parseAsHtml(tagHandler = HtmlParser(linkHandler))
+            val translatedMode = commentTranslations.enabled.value == true
+            val result = if (translatedMode) commentTranslations.resultFor(comment) else null
+            if (result is CommentsTranslationViewModel.Result.Translated) {
+                commentText.text = result.text
+            } else {
+                commentText.text = comment.commentText?.replace("</a>", "</a> ")
+                    ?.parseAsHtml(tagHandler = HtmlParser(linkHandler))
+            }
+
+            translationStatus.isVisible = translatedMode && comment.commentText?.isNotBlank() == true &&
+                (result == null || result == CommentsTranslationViewModel.Result.Failed)
+            if (translationStatus.isVisible) {
+                translationStatus.setText(
+                    if (result == CommentsTranslationViewModel.Result.Failed)
+                        R.string.comments_translate_unavailable
+                    else R.string.comments_translate_loading
+                )
+            }
+            if (translatedMode && result == null) {
+                commentTranslations.request(comment)
+            }
 
             ImageHelper.loadImage(comment.thumbnail, commentorImage, true)
             likesTextView.text = comment.likeCount.formatShort()
@@ -113,7 +134,11 @@ class CommentsPagingAdapter(
             }
 
             root.setOnLongClickListener {
-                saveToClipboard(comment)
+                saveToClipboard(
+                    if (translatedMode && result is CommentsTranslationViewModel.Result.Translated)
+                        comment.copy(commentText = result.text)
+                    else comment
+                )
                 true
             }
         }
