@@ -22,6 +22,7 @@ import android.view.SurfaceView
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewGroup.LayoutParams
+import android.widget.TextView
 import androidx.activity.BackEventCompat
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
@@ -86,6 +87,7 @@ import com.github.libretube.parcelable.PlayerData
 import com.github.libretube.services.AbstractPlayerService
 import com.github.libretube.services.OfflinePlayerService
 import com.github.libretube.services.OnlinePlayerService
+import com.github.libretube.voiceover.VoiceoverVolumeSettings
 import com.github.libretube.ui.activities.AbstractPlayerHostActivity
 import com.github.libretube.ui.activities.NoInternetActivity
 import com.github.libretube.ui.adapters.VideoCardsAdapter
@@ -112,6 +114,7 @@ import com.github.libretube.util.TextUtils
 import com.github.libretube.util.TextUtils.toTimeInSeconds
 import com.google.android.material.snackbar.Snackbar
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.slider.Slider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -424,6 +427,7 @@ class PlayerFragment : Fragment(R.layout.fragment_player), CustomPlayerCallback 
         playerData.videoId?.let { videoId = it }
         isOffline = playerData.isOffline
         binding.relPlayerTranslate?.let { it.isVisible = !isOffline }
+        binding.relPlayerVolume?.let { it.isVisible = !isOffline }
         playlistId = playerData.playlistId
         channelId = playerData.channelId
 
@@ -730,6 +734,13 @@ class PlayerFragment : Fragment(R.layout.fragment_player), CustomPlayerCallback 
             }
         }
 
+        binding.relPlayerVolume?.setOnClickListener {
+            if (!::playerController.isInitialized || !playerController.isConnected) {
+                return@setOnClickListener
+            }
+            showVotAudioMixer()
+        }
+
         // share button
         binding.relPlayerShare.setOnClickListener {
             if (!this::streams.isInitialized) return@setOnClickListener
@@ -817,6 +828,59 @@ class PlayerFragment : Fragment(R.layout.fragment_player), CustomPlayerCallback 
         }
 
         binding.descriptionLayout.handleLink = this::handleLink
+    }
+
+    /**
+     * Two independent volume sliders. The saved gains are used automatically
+     * on the next translated video; moving them also updates live playback.
+     */
+    private fun showVotAudioMixer() {
+        if (isOffline || !::playerController.isInitialized) return
+
+        val context = requireContext()
+        val view = layoutInflater.inflate(R.layout.dialog_vot_volume, null)
+        val originalSlider = view.findViewById<Slider>(R.id.votOriginalSlider)
+        val translatedSlider = view.findViewById<Slider>(R.id.votTranslatedSlider)
+        val originalValue = view.findViewById<TextView>(R.id.votOriginalValue)
+        val translatedValue = view.findViewById<TextView>(R.id.votTranslatedValue)
+
+        fun saveAndSend(command: PlayerCommand, gain: Float) {
+            if (command == PlayerCommand.SET_VOT_ORIGINAL_GAIN) {
+                VoiceoverVolumeSettings.setOriginal(context, gain)
+            } else {
+                VoiceoverVolumeSettings.setTranslated(context, gain)
+            }
+            if (playerController.isConnected) {
+                playerController.sendCustomCommand(
+                    AbstractPlayerService.runPlayerActionCommand,
+                    bundleOf(command.name to gain)
+                )
+            }
+        }
+
+        originalSlider.value = VoiceoverVolumeSettings.original(context) * 100f
+        translatedSlider.value = VoiceoverVolumeSettings.translated(context) * 100f
+        originalValue.text = "${originalSlider.value.toInt()}%"
+        translatedValue.text = "${translatedSlider.value.toInt()}%"
+
+        originalSlider.addOnChangeListener { _, value, fromUser ->
+            originalValue.text = "${value.toInt()}%"
+            if (fromUser) {
+                saveAndSend(PlayerCommand.SET_VOT_ORIGINAL_GAIN, value / 100f)
+            }
+        }
+        translatedSlider.addOnChangeListener { _, value, fromUser ->
+            translatedValue.text = "${value.toInt()}%"
+            if (fromUser) {
+                saveAndSend(PlayerCommand.SET_VOT_TRANSLATED_GAIN, value / 100f)
+            }
+        }
+
+        MaterialAlertDialogBuilder(context)
+            .setTitle("Громкость AI-перевода")
+            .setView(view)
+            .setPositiveButton("Готово", null)
+            .show()
     }
 
     private fun updateMaxSheetHeight() {
