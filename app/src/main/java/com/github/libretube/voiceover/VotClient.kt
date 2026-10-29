@@ -1,6 +1,7 @@
 package com.github.libretube.voiceover
 
 import android.util.Base64
+import android.util.Log
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.io.ByteArrayOutputStream
 import kotlinx.coroutines.CancellationException
@@ -37,7 +38,6 @@ internal class VotClient {
     private val hosts = listOf(
         "vot-worker.vtrans.eu.cc",
         "vot-worker.eu.cc",
-        "vot-worker.toil.cc",
         "api.browser.yandex.ru"
     )
     private var hostIndex = 0
@@ -294,6 +294,8 @@ internal class VotClient {
                     active
                 )
                 val result = VotProtocol.translationResponse(data)
+                // Host diagnostics do not contain URLs, IDs, request bodies or tokens.
+                Log.i("RootTube-VOT", "host=$host status=${result.status} remaining=${result.remainingSeconds} hasAudio=${!result.audioUrl.isNullOrBlank()}")
                 if (result.translationId.isNotBlank()) translationId = result.translationId
                 if (result.ready) {
                     val audioUrl = result.audioUrl!!
@@ -338,6 +340,7 @@ internal class VotClient {
                             result.message?.take(120)
                                 ?: "VOT отказал в обработке этого ролика (status 0)"
                         )
+                        Log.w("RootTube-VOT", "host=$host videoProcessingRejected status=0")
                         consecutiveServerFailures++
                         expiredSessionRetries = 0
                         rotateHost()
@@ -375,6 +378,7 @@ internal class VotClient {
             } catch (error: Exception) {
                 lastError = error
                 val failedHost = host
+                Log.w("RootTube-VOT", "host=$failedHost failure=${error.javaClass.simpleName}: ${error.message?.take(120)}")
                 rotateHost()
                 audioSent = false
                 translationId = ""
