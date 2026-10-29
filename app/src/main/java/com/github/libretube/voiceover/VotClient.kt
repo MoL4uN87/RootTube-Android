@@ -135,7 +135,11 @@ internal class VotClient {
 
         return try {
             val req = Request.Builder().url(parsed).header("User-Agent", USER_AGENT).build()
-            client.newBuilder().followRedirects(false).build().newCall(req).execute().use { response ->
+            client.newBuilder()
+                .followRedirects(false)
+                .callTimeout(20, TimeUnit.SECONDS)
+                .build()
+                .newCall(req).execute().use { response ->
                 if (!response.isSuccessful) {
                     Log.i("RootTube-VOT", "sourceAudio download HTTP ${response.code}")
                     return null
@@ -182,7 +186,7 @@ internal class VotClient {
         url: String,
         videoId: String,
         translationId: String,
-        directAudioUrl: String?,
+        directAudioUrls: List<String>,
         active: Session,
         onProgress: (String) -> Unit
     ) {
@@ -208,7 +212,15 @@ internal class VotClient {
         }
 
         Log.i("RootTube-VOT", "stage=sourceAudio download-started host=$host")
-        val audio = sourceAudioBytes(directAudioUrl)
+        var audio: ByteArray? = null
+        for ((index, url) in directAudioUrls.take(4).withIndex()) {
+            Log.i("RootTube-VOT", "stage=sourceAudio trying candidate=${index + 1}")
+            audio = sourceAudioBytes(url)
+            if (audio != null) {
+                Log.i("RootTube-VOT", "stage=sourceAudio selected candidate=${index + 1}")
+                break
+            }
+        }
         Log.i("RootTube-VOT", "stage=sourceAudio download-finished bytes=${audio?.size ?: 0}")
         onProgress(if (audio == null) "Пробуем запасной способ перевода…" else
             "Отправляем аудиофрагмент для перевода…")
@@ -317,7 +329,7 @@ internal class VotClient {
         videoId: String,
         durationSeconds: Double,
         title: String,
-        directAudioUrl: String? = null,
+        directAudioUrls: List<String> = emptyList(),
         onProgress: (String) -> Unit = {}
     ): String = withContext(Dispatchers.IO) {
         require(Regex("^[a-zA-Z0-9_-]{11}$").matches(videoId)) {
@@ -359,7 +371,7 @@ internal class VotClient {
                         // Set the flag only once the server has accepted the audio PUT.
                         onProgress("Сервер запросил исходное аудио…")
                         provideSourceAudio(
-                            videoUrl, videoId, translationId, directAudioUrl, active, onProgress
+                            videoUrl, videoId, translationId, directAudioUrls, active, onProgress
                         )
                         audioSent = true
                         stuckCounter = 0
