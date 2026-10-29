@@ -55,25 +55,6 @@ internal class VideoBriefClient {
             }
         }
 
-        // VOT can provide already translated subtitles for some English videos.
-        if (captions.size < MIN_CUES) {
-            currentCoroutineContext().ensureActive()
-            try {
-                VotClient().russianSubtitles(videoId)?.let { raw ->
-                    val parsed = parse(raw)
-                    if (parsed.size >= MIN_CUES) {
-                        captions = parsed
-                        source = "русские субтитры VOT"
-                        isRussian = true
-                    }
-                }
-            } catch (cancel: CancellationException) {
-                throw cancel
-            } catch (_: Exception) {
-                // VOT subtitles are optional; normal YouTube tracks are next.
-            }
-        }
-
         if (captions.size < MIN_CUES) {
             for (track in other.sortedBy {
                 if (it.code?.startsWith("en", true) == true) 0 else 1
@@ -104,6 +85,25 @@ internal class VideoBriefClient {
                     source = "субтитры напрямую с YouTube ($language)"
                     break
                 }
+            }
+        }
+
+        // Last resort: VOT subtitles can be unavailable when its relays are down.
+        if (captions.size < MIN_CUES) {
+            currentCoroutineContext().ensureActive()
+            try {
+                VotClient().russianSubtitles(videoId)?.let { raw ->
+                    val parsed = parse(raw)
+                    if (parsed.size >= MIN_CUES) {
+                        captions = parsed
+                        source = "русские субтитры VOT"
+                        isRussian = true
+                    }
+                }
+            } catch (cancel: CancellationException) {
+                throw cancel
+            } catch (_: Exception) {
+                // VOT subtitles are optional; normal YouTube tracks are next.
             }
         }
 
