@@ -76,10 +76,21 @@ open class OnlinePlayerService : AbstractPlayerService() {
     private var votSerial = 0
 
     override fun runPlayerCommand(args: Bundle) {
-        if (args.containsKey(PlayerCommand.TOGGLE_VOT_TRANSLATION.name)) {
-            toggleVotTranslation()
-        } else {
-            super.runPlayerCommand(args)
+        when {
+            args.containsKey(PlayerCommand.TOGGLE_VOT_TRANSLATION.name) ->
+                toggleVotTranslation()
+
+            args.containsKey(PlayerCommand.SET_VOT_ORIGINAL_GAIN.name) ->
+                voiceoverOverlay?.setOriginalGain(
+                    args.getFloat(PlayerCommand.SET_VOT_ORIGINAL_GAIN.name)
+                )
+
+            args.containsKey(PlayerCommand.SET_VOT_TRANSLATED_GAIN.name) ->
+                voiceoverOverlay?.setTranslatedGain(
+                    args.getFloat(PlayerCommand.SET_VOT_TRANSLATED_GAIN.name)
+                )
+
+            else -> super.runPlayerCommand(args)
         }
     }
 
