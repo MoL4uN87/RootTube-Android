@@ -71,7 +71,6 @@ open class OnlinePlayerService : AbstractPlayerService() {
 
     private val scope = CoroutineScope(Dispatchers.Main)
 
-    private val votClient = VotClient()
     private var votJob: Job? = null
     private var voiceoverOverlay: VoiceoverOverlay? = null
     private var votSerial = 0
@@ -110,7 +109,7 @@ open class OnlinePlayerService : AbstractPlayerService() {
         votJob = scope.launch {
             try {
                 toastFromMainThread("Запрашиваем русскую AI-озвучку…")
-                val audioUrl = votClient.translate(
+                val audioUrl = VotClient().translate(
                     videoId = requestedId,
                     durationSeconds = video.duration.toDouble(),
                     title = video.title
@@ -152,9 +151,9 @@ open class OnlinePlayerService : AbstractPlayerService() {
                     if (!isTransitioning) playNextVideo(relatedStreams = streams?.relatedStreams)
                 }
 
-                Player.STATE_IDLE -> {
-                    onDestroy()
-                }
+                // STATE_IDLE also occurs when replacing a video with clearMediaItems().
+                // It must not tear down the entire foreground playback service.
+                Player.STATE_IDLE -> Unit
 
                 Player.STATE_BUFFERING -> {}
                 Player.STATE_READY -> {
@@ -199,7 +198,9 @@ open class OnlinePlayerService : AbstractPlayerService() {
     }
 
     override suspend fun startPlayback() {
-        clearVotTranslation()
+        // startPlayback() may run on Dispatchers.IO; Media3 players must be
+        // released on their application looper (the main thread here).
+        withContext(Dispatchers.Main) { clearVotTranslation() }
         super.startPlayback()
 
         val timestampMs = startTimestampSeconds?.times(1000) ?: 0L
@@ -282,6 +283,9 @@ open class OnlinePlayerService : AbstractPlayerService() {
     }
 
     override fun navigateVideo(videoId: String) {
+        // Session commands arrive on the main looper. Release the translated
+        // audio BEFORE clearMediaItems() switches the original player to IDLE.
+        clearVotTranslation()
         this.streams = null
 
         super.navigateVideo(videoId)
