@@ -132,7 +132,21 @@ open class OnlinePlayerService : AbstractPlayerService() {
                         { if (it.contentLength > 0) it.contentLength else Long.MAX_VALUE }
                     ))
                     .firstOrNull()
-                val originalAudio = originalTrack?.url
+                val audioCandidates = video.audioStreams
+                    .filter { !it.url.isNullOrBlank() }
+                    .sortedWith(compareBy(
+                        { if (it.audioTrackLocale?.startsWith("en", ignoreCase = true) == true) 0 else 1 },
+                        { if (it.mimeType?.contains("webm", ignoreCase = true) == true) 0 else 1 },
+                        { if (it.contentLength in 1..(10L * 1024 * 1024)) 0 else 1 },
+                        { if (it.contentLength > 0) it.contentLength else Long.MAX_VALUE }
+                    ))
+                    .mapNotNull { it.url }
+                    .distinct()
+                    .take(4)
+                Log.i(
+                    "RootTube-VOT",
+                    "sourceAudio candidates=${audioCandidates.size}"
+                )
                 Log.i(
                     "RootTube-VOT",
                     "selected audio: mime=${originalTrack?.mimeType ?: "unknown"} " +
@@ -145,7 +159,7 @@ open class OnlinePlayerService : AbstractPlayerService() {
                     videoId = requestedId,
                     durationSeconds = video.duration.toDouble(),
                     title = video.title,
-                    directAudioUrl = originalAudio,
+                    directAudioUrls = audioCandidates,
                     onProgress = { status ->
                         if (serial == votSerial && status != lastProgress) {
                             lastProgress = status
