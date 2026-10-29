@@ -125,7 +125,8 @@ internal class VotClient {
 
         return try {
             val req = Request.Builder().url(parsed).header("User-Agent", USER_AGENT).build()
-            client.newCall(req).execute().use { response ->
+            // Reject redirects to arbitrary hosts or local network addresses.
+            client.newBuilder().followRedirects(false).build().newCall(req).execute().use { response ->
                 if (!response.isSuccessful) return null
                 val source = response.body?.byteStream() ?: return null
                 val output = ByteArrayOutputStream()
