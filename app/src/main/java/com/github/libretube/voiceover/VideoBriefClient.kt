@@ -190,7 +190,7 @@ internal class VideoBriefClient {
                 .get().build()
             http.newCall(request).execute().use { response ->
                 val html = if (response.isSuccessful) limitedBody(response.body, 4 * MAX_BYTES) else null
-                val found = html?.let { jsonArrayAfter(it, "\\"captionTracks\\":") }
+                val found = html?.let { jsonArrayAfter(it, "\"captionTracks\":") }
                 if (found == null) emptyList() else captionUrls(JSONArray(found))
             }
         } catch (cancel: CancellationException) {
@@ -223,8 +223,8 @@ internal class VideoBriefClient {
             val ch = html[index]
             if (quoted) {
                 if (escaped) escaped = false
-                else if (ch == '\\\\') escaped = true
-                else if (ch == '"') quoted = false
+                else if (ch == '\\') escaped = true
+                else if (ch == '\\') escaped = true
             } else {
                 when (ch) {
                     '"' -> quoted = true
