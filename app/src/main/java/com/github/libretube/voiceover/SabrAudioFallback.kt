@@ -91,7 +91,7 @@ internal object SabrAudioFallback {
             if (!append(init.data)) error("SABR audio exceeds $maxBytes bytes")
             val lastSegment = client.getEndSegmentNumber(format)
                 ?: error("SABR did not return the segment count")
-            if (lastSegment !in 1..MAX_SEGMENTS.toLong()) {
+            if (lastSegment !in 1L..MAX_SEGMENTS.toLong()) {
                 error("SABR segment count invalid: $lastSegment")
             }
 
@@ -121,10 +121,10 @@ internal object SabrAudioFallback {
 
             val completed = output.toByteArray()
             if (completed.size < 4 ||
-                completed[0].toInt() and 255 != 0x1A ||
-                completed[1].toInt() and 255 != 0x45 ||
-                completed[2].toInt() and 255 != 0xDF ||
-                completed[3].toInt() and 255 != 0xA3) {
+                (completed[0].toInt() and 255) != 0x1A ||
+                (completed[1].toInt() and 255) != 0x45 ||
+                (completed[2].toInt() and 255) != 0xDF ||
+                (completed[3].toInt() and 255) != 0xA3) {
                 error("SABR audio does not start with a WebM header")
             }
             Log.i(
