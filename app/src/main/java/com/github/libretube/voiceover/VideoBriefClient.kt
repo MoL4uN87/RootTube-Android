@@ -261,7 +261,11 @@ internal class VideoBriefClient {
             return emptyList()
         }
         return try {
-            http.newCall(Request.Builder().url(uri).get().build()).execute().use { response ->
+            http.newCall(Request.Builder()
+                .url(uri)
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/123.0 Safari/537.36")
+                .header("Referer", "https://www.youtube.com/")
+                .get().build()).execute().use { response ->
                 if (!response.isSuccessful) return@use emptyList()
                 val body = response.body ?: return@use emptyList()
                 if (body.contentLength() > MAX_BYTES) return@use emptyList()
@@ -462,6 +466,6 @@ internal class VideoBriefClient {
 
     companion object {
         private const val MAX_BYTES = 2 * 1024 * 1024
-        private const val MIN_CUES = 8
+        private const val MIN_CUES = 3
     }
 }
