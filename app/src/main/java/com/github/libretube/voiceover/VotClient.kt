@@ -117,35 +117,61 @@ internal class VotClient {
     }
 
     private fun sourceAudioBytes(sourceUrl: String?, maxBytes: Int = MAX_AUDIO_BYTES): ByteArray? {
-        val parsed = sourceUrl?.toHttpUrlOrNull() ?: return null
-        if (!parsed.isHttps) return null
-        // Never let an untrusted video metadata URL request arbitrary/private hosts.
+        val parsed = sourceUrl?.toHttpUrlOrNull()
+        if (parsed == null || !parsed.isHttps) {
+            Log.i("RootTube-VOT", "sourceAudio unavailable: no direct HTTPS audio URL")
+            return null
+        }
+        // Never let untrusted metadata request arbitrary or private hosts.
         val domain = parsed.host.lowercase()
         if (!(domain == "googlevideo.com" || domain.endsWith(".googlevideo.com") ||
-                domain == "youtube.com" || domain.endsWith(".youtube.com"))) return null
+                domain == "youtube.com" || domain.endsWith(".youtube.com"))) {
+            Log.i("RootTube-VOT", "sourceAudio unavailable: URL not from a permitted media host")
+            return null
+        }
 
         return try {
             val req = Request.Builder().url(parsed).header("User-Agent", USER_AGENT).build()
-            // Reject redirects to arbitrary hosts or local network addresses.
             client.newBuilder().followRedirects(false).build().newCall(req).execute().use { response ->
-                if (!response.isSuccessful) return null
-                val source = response.body?.byteStream() ?: return null
+                if (!response.isSuccessful) {
+                    Log.i("RootTube-VOT", "sourceAudio download HTTP ${response.code}")
+                    return null
+                }
+                val body = response.body
+                // Never upload the truncated beginning of a longer WebM/M4A
+                // stream as if it were a complete audio container.
+                if (body.contentLength() > maxBytes) {
+                    Log.i("RootTube-VOT", "sourceAudio too large: ${body.contentLength()} bytes; using VOT fallback")
+                    return null
+                }
+
                 val output = ByteArrayOutputStream()
                 val buffer = ByteArray(32 * 1024)
-                var total = 0
-                while (total < maxBytes) {
-                    val read = source.read(buffer, 0, minOf(buffer.size, maxBytes - total))
-                    if (read < 0) break
-                    if (read == 0) continue
-                    output.write(buffer, 0, read)
-                    total += read
+                body.byteStream().use { source ->
+                    while (output.size() <= maxBytes) {
+                        val n = source.read(
+                            buffer,
+                            0,
+                            minOf(buffer.size, maxBytes + 1 - output.size())
+                        )
+                        if (n < 0) break
+                        if (n > 0) output.write(buffer, 0, n)
+                    }
                 }
-                output.toByteArray().takeIf { it.isNotEmpty() }
+                if (output.size() > maxBytes) {
+                    Log.i("RootTube-VOT", "sourceAudio exceeds $maxBytes byte cap; using VOT fallback")
+                    null
+                } else {
+                    output.toByteArray().takeIf { it.isNotEmpty() }?.also {
+                        Log.i("RootTube-VOT", "sourceAudio downloaded completely: ${it.size} bytes")
+                    }
+                }
             }
         } catch (cancel: CancellationException) {
             throw cancel
-        } catch (_: Exception) {
-            null // Unsupported or expired direct source: try the empty-audio fallback.
+        } catch (error: Exception) {
+            Log.i("RootTube-VOT", "sourceAudio download failed: ${error.javaClass.simpleName}")
+            null
         }
     }
 
@@ -174,6 +200,11 @@ internal class VotClient {
         } else {
             "random-web_abr-${uuid()}"
         }
+        Log.i(
+            "RootTube-VOT",
+            "audio upload: mode=${if (audio == null) "empty-fallback" else "complete-source"} " +
+                "bytes=${audio?.size ?: 0} host=$host"
+        )
         request(
             "/video-translation/audio",
             VotProtocol.audioRequest(url, translationId, fileId, audio ?: ByteArray(0)),
@@ -340,7 +371,11 @@ internal class VotClient {
                             result.message?.take(120)
                                 ?: "VOT отказал в обработке этого ролика (status 0)"
                         )
-                        Log.w("RootTube-VOT", "host=$host videoProcessingRejected status=0")
+                        Log.w(
+                            "RootTube-VOT",
+                            "host=$host videoProcessingRejected status=0 " +
+                                "message=${result.message?.replace('\\n', ' ')?.take(160) ?: "<none>"}"
+                        )
                         consecutiveServerFailures++
                         expiredSessionRetries = 0
                         rotateHost()
