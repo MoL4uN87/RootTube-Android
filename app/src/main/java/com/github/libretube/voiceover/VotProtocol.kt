@@ -69,17 +69,30 @@ internal object VotProtocol {
             string(this, 19, title)
         }.toByteArray()
 
-    fun emptyAudioRequest(url: String, translationId: String, videoId: String): ByteArray =
-        ByteArrayOutputStream().apply {
-            string(this, 1, translationId)
-            string(this, 2, url)
-            val inner = ByteArrayOutputStream()
-            string(inner, 1, "fallback-empty-audio:video-translation:$videoId")
-            val bytes = inner.toByteArray()
-            tag(this, 6, 2)
-            varint(this, bytes.size.toLong())
-            write(bytes)
-        }.toByteArray()
+    /**
+     * Uploads a bounded source-audio fragment when the server returns status 6.
+     * Never includes YouTube cookies or user credentials.
+     */
+    fun audioRequest(
+        url: String,
+        translationId: String,
+        fileId: String,
+        audioBytes: ByteArray = ByteArray(0)
+    ): ByteArray = ByteArrayOutputStream().apply {
+        string(this, 1, translationId)
+        string(this, 2, url)
+        val inner = ByteArrayOutputStream()
+        string(inner, 1, fileId)
+        if (audioBytes.isNotEmpty()) {
+            tag(inner, 2, 2)
+            varint(inner, audioBytes.size.toLong())
+            inner.write(audioBytes)
+        }
+        val bytes = inner.toByteArray()
+        tag(this, 6, 2)
+        varint(this, bytes.size.toLong())
+        write(bytes)
+    }.toByteArray()
 
     private fun readVarint(input: ByteArrayInputStream): Long {
         var result = 0L
