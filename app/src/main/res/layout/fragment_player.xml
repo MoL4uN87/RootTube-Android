@@ -51,6 +51,12 @@
                         app:icon="@drawable/ic_headphones" />
 
                     <com.google.android.material.button.MaterialButton
+                        android:id="@+id/relPlayer_volume"
+                        style="@style/PlayerActionsButton"
+                        android:text="Громкость AI"
+                        app:icon="@drawable/ic_volume_up" />
+
+                    <com.google.android.material.button.MaterialButton
                         android:id="@+id/relPlayer_share"
                         style="@style/PlayerActionsButton"
                         android:text="@string/share"
