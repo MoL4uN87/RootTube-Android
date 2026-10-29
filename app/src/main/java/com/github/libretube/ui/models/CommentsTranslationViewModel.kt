@@ -114,6 +114,7 @@ class CommentsTranslationViewModel : ViewModel() {
         val download = downloads.getOrPut(source) {
             viewModelScope.async {
                 translator.downloadModelIfNeeded().awaitResult()
+                Unit
             }
         }
         try {
