@@ -233,8 +233,18 @@ internal class VotClient {
                                     val body = response.body ?: return@use
                                     // Limit response size; do not load an arbitrary large caption.
                                     if (body.contentLength() > MAX_SUBTITLE_BYTES) return@use
-                                    val raw = body.byteStream().use {
-                                        it.readNBytes(MAX_SUBTITLE_BYTES + 1)
+                                    val raw = body.byteStream().use { input ->
+                                        val output = ByteArrayOutputStream()
+                                        val chunk = ByteArray(8192)
+                                        while (output.size() <= MAX_SUBTITLE_BYTES) {
+                                            val n = input.read(
+                                                chunk, 0,
+                                                minOf(chunk.size, MAX_SUBTITLE_BYTES + 1 - output.size())
+                                            )
+                                            if (n < 0) break
+                                            if (n > 0) output.write(chunk, 0, n)
+                                        }
+                                        output.toByteArray()
                                     }
                                     if (raw.size <= MAX_SUBTITLE_BYTES) {
                                         val text = raw.toString(Charsets.UTF_8)
