@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="comments_translate_ru">RU</string>
+    <string name="comments_translate_original">ОРИГ</string>
+    <string name="comments_translate_tooltip">Перевести комментарии на русский</string>
+    <string name="comments_translate_original_tooltip">Показать оригинальные комментарии</string>
+    <string name="comments_translate_loading">Переводим…</string>
+    <string name="comments_translate_unavailable">Не удалось перевести</string>
+</resources>
