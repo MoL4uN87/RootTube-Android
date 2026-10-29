@@ -11,6 +11,7 @@ import androidx.media3.common.MediaItem.SubtitleConfiguration
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
 import com.github.libretube.enums.PlayerCommand
+import com.github.libretube.voiceover.SabrAudioFallback
 import com.github.libretube.voiceover.VotClient
 import com.github.libretube.voiceover.VoiceoverOverlay
 import kotlinx.coroutines.CancellationException
@@ -166,6 +167,12 @@ open class OnlinePlayerService : AbstractPlayerService() {
                     durationSeconds = video.duration.toDouble(),
                     title = video.title,
                     directAudioCandidates = audioCandidates,
+                    sabrAudioProvider = {
+                        SabrAudioFallback.fetch(
+                            requestedId, video, orderedTracks.firstOrNull()?.url,
+                            10 * 1024 * 1024
+                        )
+                    },
                     onProgress = { status ->
                         if (serial == votSerial && status != lastProgress) {
                             lastProgress = status
