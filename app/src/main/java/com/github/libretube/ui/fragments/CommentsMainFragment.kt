@@ -61,7 +61,7 @@ class CommentsMainFragment : Fragment(R.layout.fragment_comments) {
 
         val commentPagingAdapter = CommentsPagingAdapter(
             false,
-            requireArguments().getString(IntentData.channelAvatar),,
+            requireArguments().getString(IntentData.channelAvatar),
             commentTranslations,
             handleLink = {
                 setFragmentResult(
