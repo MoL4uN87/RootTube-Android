@@ -288,7 +288,10 @@ class SabrClient private constructor(
      * Returns the segment specified in [playbackRequest].
      * Segments are usually of a length between 2 and 10 seconds.
      */
-    fun getNextSegment(playbackRequest: PlaybackRequest): Segment? {
+    fun getNextSegment(
+        playbackRequest: PlaybackRequest,
+        preservePrefetchedSegments: Boolean = false,
+    ): Segment? {
         if (fatalError != null) {
             throw Exception("SABR error: ${fatalError!!.type}")
         }
@@ -314,7 +317,9 @@ class SabrClient private constructor(
                 if (format == null || !format.hasSegment(playbackRequest.segment)) {
                     // remove segments that where downloaded, but never requested by the player
                     // (e.g. due to seeking), to avoid keeping them around forever and thus leaking memory
-                    format?.downloadedSegments?.clear()
+                    if (!preservePrefetchedSegments) {
+                        format?.downloadedSegments?.clear()
+                    }
 
                     // fetch new data
                     media(playbackRequest)
@@ -325,7 +330,17 @@ class SabrClient private constructor(
                     initializedFormats.keys.retainAll { audioFormat?.stream?.itag == it || videoFormat?.stream?.itag == it }
                 }
                 format = format ?: initializedFormats[itag]
-                return@withContext format?.getSegment(playbackRequest.segment)
+                val segment = format?.getSegment(playbackRequest.segment)
+                if (preservePrefetchedSegments && segment == null) {
+                    Log.i(
+                        "RootTube-VOT",
+                        "sourceAudio SABR missing requested=${playbackRequest.segment} " +
+                            "position=${playbackRequest.playerPosition} " +
+                            "available=${format?.downloadedSegments?.keys?.sorted()?.take(20)} " +
+                            "buffered=${format?.bufferedSegments?.keys?.sorted()?.takeLast(5)}"
+                    )
+                }
+                return@withContext segment
             }
         }
     }
