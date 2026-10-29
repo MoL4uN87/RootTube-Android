@@ -1,5 +1,6 @@
 package com.github.libretube.voiceover
 
+import android.media.AudioFormat
 import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
@@ -126,6 +127,11 @@ internal object VotAudioTranscoder {
                         if (actualRate != rate || actualChannels != channels) {
                             error("Decoder changed PCM layout: $actualRate/$actualChannels")
                         }
+                        if (actualFormat.containsKey(MediaFormat.KEY_PCM_ENCODING) &&
+                            actualFormat.getInteger(MediaFormat.KEY_PCM_ENCODING) !=
+                            AudioFormat.ENCODING_PCM_16BIT) {
+                            error("Decoder produced non-16-bit PCM")
+                        }
                         progressed = true
                     }
                 }
@@ -190,7 +196,13 @@ internal object VotAudioTranscoder {
             outputMuxer.stop()
             muxerStarted = false
             val bytes = outputFile.readBytes()
-            if (bytes.isEmpty() || bytes.size > maxBytes) return null
+            if (bytes.size < 4 || bytes.size > maxBytes ||
+                (bytes[0].toInt() and 255) != 0x1A ||
+                (bytes[1].toInt() and 255) != 0x45 ||
+                (bytes[2].toInt() and 255) != 0xDF ||
+                (bytes[3].toInt() and 255) != 0xA3) {
+                return null
+            }
             Log.i(TAG, "transcode complete: originalBytes=${input.size} webmBytes=${bytes.size}")
             return bytes
         } catch (error: Exception) {
