@@ -10,6 +10,8 @@ import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
@@ -87,9 +89,29 @@ internal class VideoBriefClient {
         }
 
         if (captions.size < MIN_CUES) {
+            // Independent fallback: neither the current video backend nor VOT
+            // needs to be available for YouTube's published caption tracks.
+            val direct = directYouTubeTracks(videoId)
+            for ((url, language) in direct.sortedBy { if (it.second.startsWith("ru")) 0 else 1 }) {
+                currentCoroutineContext().ensureActive()
+                captions = download(url)
+                if (captions.size < MIN_CUES && !url.contains("fmt=")) {
+                    val suffix = if (url.contains("?")) "&fmt=json3" else "?fmt=json3"
+                    captions = download(url + suffix)
+                }
+                if (captions.size >= MIN_CUES) {
+                    isRussian = language.startsWith("ru")
+                    source = "субтитры напрямую с YouTube ($language)"
+                    break
+                }
+            }
+        }
+
+        if (captions.size < MIN_CUES) {
             throw IllegalStateException(
-                "Для этого видео не удалось получить достаточно субтитров. " +
-                    "Попробуй другой ролик с включёнными субтитрами."
+                "Нет доступной дорожки субтитров: источник видео, VOT и " +
+                    "прямой запрос YouTube не вернули текст. Если в ролике " +
+                    "нет субтитров, для пересказа потребуется распознавание речи."
             )
         }
 
@@ -116,6 +138,119 @@ internal class VideoBriefClient {
             "Таймкоды приблизительные; в субтитрах могут быть ошибки."
 
         Brief(preamble + momentLines.joinToString("\n\n") + footer, source, langLabel)
+    }
+
+    /**
+     * Independently discovers signed caption tracks. This deliberately does
+     * not send YouTube cookies or require the Yandex VOT server.
+     */
+    private fun directYouTubeTracks(videoId: String): List<Pair<String, String>> {
+        if (!Regex("^[a-zA-Z0-9_-]{11}$").matches(videoId)) return emptyList()
+        try {
+            val payload = JSONObject()
+                .put("videoId", videoId)
+                .put("context", JSONObject().put("client", JSONObject()
+                    .put("clientName", "ANDROID_VR")
+                    .put("clientVersion", "1.60.19")
+                    .put("deviceMake", "Oculus")
+                    .put("deviceModel", "Quest 3")
+                    .put("osName", "Android")
+                    .put("osVersion", "12")
+                    .put("hl", "en")
+                    .put("gl", "US")))
+            val request = Request.Builder()
+                .url("https://www.youtube.com/youtubei/v1/player")
+                .header("User-Agent", "com.google.android.apps.youtube.vr.oculus/1.60.19 (Linux; U; Android 12)")
+                .post(payload.toString().toRequestBody("application/json".toMediaType()))
+                .build()
+            val tracks = http.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) null
+                else {
+                    val json = limitedBody(response.body)
+                    if (json != null) JSONObject(json)
+                        .optJSONObject("captions")
+                        ?.optJSONObject("playerCaptionsTracklistRenderer")
+                        ?.optJSONArray("captionTracks")
+                    else null
+                }
+            }
+            if (tracks != null && tracks.length() > 0) {
+                return captionUrls(tracks)
+            }
+        } catch (cancel: CancellationException) {
+            throw cancel
+        } catch (_: Exception) {
+            // Fallback below: public video HTML.
+        }
+
+        return try {
+            val request = Request.Builder()
+                .url("https://www.youtube.com/watch?v=$videoId")
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/123.0 Safari/537.36")
+                .get().build()
+            http.newCall(request).execute().use { response ->
+                val html = if (response.isSuccessful) limitedBody(response.body, 4 * MAX_BYTES) else null
+                val found = html?.let { jsonArrayAfter(it, "\\"captionTracks\\":") }
+                if (found == null) emptyList() else captionUrls(JSONArray(found))
+            }
+        } catch (cancel: CancellationException) {
+            throw cancel
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun captionUrls(array: JSONArray): List<Pair<String, String>> = buildList {
+        for (i in 0 until array.length()) {
+            val t = array.optJSONObject(i) ?: continue
+            val url = t.optString("baseUrl")
+            if (url.isBlank()) continue
+            val lang = t.optString("languageCode", "und").lowercase()
+            add(url to lang)
+        }
+    }
+
+    /** Extract an array from an embedded player JSON without greedy regex. */
+    private fun jsonArrayAfter(html: String, key: String): String? {
+        val keyIndex = html.indexOf(key)
+        if (keyIndex < 0) return null
+        val begin = html.indexOf('[', keyIndex + key.length)
+        if (begin < 0) return null
+        var depth = 0
+        var quoted = false
+        var escaped = false
+        for (index in begin until minOf(html.length, begin + MAX_BYTES)) {
+            val ch = html[index]
+            if (quoted) {
+                if (escaped) escaped = false
+                else if (ch == '\\\\') escaped = true
+                else if (ch == '"') quoted = false
+            } else {
+                when (ch) {
+                    '"' -> quoted = true
+                    '[' -> depth++
+                    ']' -> {
+                        depth--
+                        if (depth == 0) return html.substring(begin, index + 1)
+                    }
+                }
+            }
+        }
+        return null
+    }
+
+    private fun limitedBody(body: okhttp3.ResponseBody?, maxBytes: Int = MAX_BYTES): String? {
+        if (body == null || body.contentLength() > maxBytes) return null
+        return body.byteStream().use { input ->
+            val output = ByteArrayOutputStream()
+            val buffer = ByteArray(8192)
+            while (output.size() <= maxBytes) {
+                val n = input.read(buffer, 0, minOf(buffer.size, maxBytes + 1 - output.size()))
+                if (n < 0) break
+                if (n > 0) output.write(buffer, 0, n)
+            }
+            if (output.size() > maxBytes) null else output.toString(Charsets.UTF_8.name())
+        }
     }
 
     private fun download(rawUrl: String?): List<Cue> {
