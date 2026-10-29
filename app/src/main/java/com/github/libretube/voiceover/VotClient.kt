@@ -374,7 +374,7 @@ internal class VotClient {
                         Log.w(
                             "RootTube-VOT",
                             "host=$host videoProcessingRejected status=0 " +
-                                "message=${result.message?.replace('\\n', ' ')?.take(160) ?: "<none>"}"
+                                "message=${result.message?.replace(10.toChar(), ' ')?.take(160) ?: "<none>"}"
                         )
                         consecutiveServerFailures++
                         expiredSessionRetries = 0
