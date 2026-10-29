@@ -75,7 +75,8 @@ internal class VotClient {
         method: String = "POST",
         contentType: String = PROTOBUF,
         acceptType: String = PROTOBUF,
-        withSecHeaders: Boolean = true
+        withSecHeaders: Boolean = true,
+        secType: String = "Vtrans"
     ): ByteArray {
         val builder = Request.Builder().url("https://$host$path")
         val common = mutableListOf(
@@ -87,10 +88,10 @@ internal class VotClient {
             if (session != null) {
                 val token = "${session.uuid}:$path:$VERSION"
                 val signature = sign(token.toByteArray(Charsets.UTF_8))
-                common += "Sec-Vtrans-Token" to "$signature:$token"
-                common += "Sec-Vtrans-Sk" to session.secret
+                common += "Sec-$secType-Token" to "$signature:$token"
+                common += "Sec-$secType-Sk" to session.secret
             }
-            common += "Vtrans-Signature" to sign(body)
+            common += "$secType-Signature" to sign(body)
         }
 
         if (host == DIRECT_HOST) {
@@ -192,6 +193,67 @@ internal class VotClient {
         return Session(id, secret, now + ttlSeconds * 1000L).also { session = it }
     }
 
+    /**
+     * Fetches already available Russian VOT subtitles without starting speech
+     * synthesis. Returns null if the unofficial service has no subtitles.
+     * No video audio or login credentials are sent.
+     */
+    suspend fun russianSubtitles(videoId: String): String? = withContext(Dispatchers.IO) {
+        if (!Regex("^[a-zA-Z0-9_-]{11}$").matches(videoId)) return@withContext null
+        val videoUrl = "https://youtu.be/$videoId"
+
+        for (index in hosts.indices) {
+            currentCoroutineContext().ensureActive()
+            try {
+                val active = session()
+                val bytes = request(
+                    "/video-subtitles/get-subtitles",
+                    VotProtocol.subtitlesRequest(videoUrl),
+                    active,
+                    secType = "Vsubs"
+                )
+                val entries = VotProtocol.subtitlesResponse(bytes)
+                val translated = entries.firstOrNull {
+                    it.translatedLanguage.equals("ru", ignoreCase = true) &&
+                        it.translatedUrl.isNotBlank()
+                }?.translatedUrl
+                val original = entries.firstOrNull {
+                    it.language.equals("ru", ignoreCase = true) &&
+                        it.url.isNotBlank()
+                }?.url
+                val selected = translated ?: original
+                if (selected != null) {
+                    val parsed = selected.toHttpUrlOrNull()
+                    if (parsed != null && parsed.isHttps &&
+                        parsed.host != "localhost" && !parsed.host.startsWith("127.")) {
+                        client.newBuilder().followRedirects(false).build()
+                            .newCall(Request.Builder().url(parsed).get().build())
+                            .execute().use { response ->
+                                if (response.isSuccessful) {
+                                    val body = response.body ?: return@use
+                                    // Limit response size; do not load an arbitrary large caption.
+                                    if (body.contentLength() > MAX_SUBTITLE_BYTES) return@use
+                                    val raw = body.byteStream().use {
+                                        it.readNBytes(MAX_SUBTITLE_BYTES + 1)
+                                    }
+                                    if (raw.size <= MAX_SUBTITLE_BYTES) {
+                                        val text = raw.toString(Charsets.UTF_8)
+                                        if (text.isNotBlank()) return@withContext text
+                                    }
+                                }
+                            }
+                    }
+                }
+            } catch (cancel: CancellationException) {
+                throw cancel
+            } catch (_: Exception) {
+                // Non-critical: fall back to the video's own subtitle tracks.
+            }
+            rotateHost()
+        }
+        null
+    }
+
     suspend fun translate(
         videoId: String,
         durationSeconds: Double,
@@ -289,6 +351,7 @@ internal class VotClient {
         private const val DIRECT_HOST = "api.browser.yandex.ru"
         private const val PROTOBUF = "application/x-protobuf"
         private const val MAX_AUDIO_BYTES = 10 * 1024 * 1024
+        private const val MAX_SUBTITLE_BYTES = 2 * 1024 * 1024
         // Public compatibility key from the third-party VOT Player source, not a RootTube secret.
         private const val VTRANS_KEY = "bt8xH3VOlb4mqf0nqAibnDOoiPlXsisf"
         private const val VERSION = "26.8.3.971"
