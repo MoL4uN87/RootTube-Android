@@ -76,7 +76,8 @@ internal class VotClient {
         contentType: String = PROTOBUF,
         acceptType: String = PROTOBUF,
         withSecHeaders: Boolean = true,
-        secType: String = "Vtrans"
+        secType: String = "Vtrans",
+        timeoutSeconds: Long? = null
     ): ByteArray {
         val builder = Request.Builder().url("https://$host$path")
         val common = mutableListOf(
@@ -110,7 +111,9 @@ internal class VotClient {
 
         val requestBody = body.toRequestBody(contentType.toMediaType())
         if (method == "PUT") builder.put(requestBody) else builder.post(requestBody)
-        client.newCall(builder.build()).execute().use { response ->
+        val transport = if (timeoutSeconds == null) client
+            else client.newBuilder().callTimeout(timeoutSeconds, TimeUnit.SECONDS).build()
+        transport.newCall(builder.build()).execute().use { response ->
             check(response.isSuccessful) { "VOT HTTP ${response.code}" }
             return response.body?.bytes() ?: error("Empty VOT response")
         }
@@ -185,14 +188,28 @@ internal class VotClient {
     ) {
         val failJson = JSONObject().put("video_url", url).toString()
             .toByteArray(Charsets.UTF_8)
-        runCatching {
+        Log.i("RootTube-VOT", "stage=fail-audio-js started host=$host")
+        try {
             request(
                 "/video-translation/fail-audio-js", failJson, active, "PUT",
-                "application/json", "application/json", withSecHeaders = false
+                "application/json", "application/json",
+                withSecHeaders = false, timeoutSeconds = 12L
+            )
+            Log.i("RootTube-VOT", "stage=fail-audio-js completed host=$host")
+        } catch (cancel: CancellationException) {
+            throw cancel
+        } catch (error: Exception) {
+            // The fallback endpoint may fail, but we can still try real audio.
+            Log.w(
+                "RootTube-VOT",
+                "stage=fail-audio-js failed host=$host cause=${error.javaClass.simpleName} " +
+                    "message=${error.message?.take(100)}"
             )
         }
 
+        Log.i("RootTube-VOT", "stage=sourceAudio download-started host=$host")
         val audio = sourceAudioBytes(directAudioUrl)
+        Log.i("RootTube-VOT", "stage=sourceAudio download-finished bytes=${audio?.size ?: 0}")
         onProgress(if (audio == null) "Пробуем запасной способ перевода…" else
             "Отправляем аудиофрагмент для перевода…")
         val fileId = if (audio == null) {
@@ -211,6 +228,7 @@ internal class VotClient {
             active,
             "PUT"
         )
+        Log.i("RootTube-VOT", "stage=audio-upload accepted host=$host")
     }
 
     private fun session(): Session {
