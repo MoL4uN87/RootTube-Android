@@ -96,27 +96,53 @@ internal object SabrAudioFallback {
             }
 
             var playbackMs = 0L
+            val buffered = ArrayList<Long>()
             for (sequence in 1L..lastSegment) {
                 currentCoroutineContext().ensureActive()
                 if (SystemClock.elapsedRealtime() - begin > TIME_BUDGET_MS) {
                     error("SABR audio exceeded time budget")
                 }
-                val segment = client.getNextSegment(
-                    PlaybackRequest(
-                        format = format,
-                        playerPosition = playbackMs,
-                        playbackSpeed = 1.0f,
-                        segment = sequence,
-                        segmentStartTimeMs = playbackMs,
-                        bufferedSegments = emptyList()
+
+                // Mirror the player's buffered-segment queue. With an empty
+                // queue on every request, SABR can keep offering the same
+                // initial fragments instead of advancing to the next segment.
+                var segment: com.github.libretube.player.parser.Segment? = null
+                for (retry in 0..3) {
+                    currentCoroutineContext().ensureActive()
+                    if (SystemClock.elapsedRealtime() - begin > TIME_BUDGET_MS) {
+                        error("SABR audio exceeded time budget")
+                    }
+                    segment = client.getNextSegment(
+                        PlaybackRequest(
+                            format = format,
+                            playerPosition = playbackMs,
+                            playbackSpeed = 1.0f,
+                            segment = sequence,
+                            segmentStartTimeMs = playbackMs,
+                            bufferedSegments = buffered
+                        )
                     )
-                ) ?: error("SABR missing segment $sequence")
-                if (segment.sequenceNumber != sequence) {
-                    error("SABR segment mismatch: $sequence != ${segment.sequenceNumber}")
+                    if (segment != null) break
+                    Log.i(
+                        TAG,
+                        "sourceAudio SABR segment=$sequence not ready; retry=${retry + 1}"
+                    )
                 }
-                if (!append(segment.data)) error("SABR audio exceeds $maxBytes bytes")
-                playbackMs = (segment.header.startMs + segment.duration)
+
+                val chunk = segment ?: error("SABR missing segment $sequence after retries")
+                if (chunk.sequenceNumber != sequence) {
+                    error("SABR segment mismatch: $sequence != ${chunk.sequenceNumber}")
+                }
+                if (!append(chunk.data)) error("SABR audio exceeds $maxBytes bytes")
+                buffered.add(sequence)
+                playbackMs = (chunk.header.startMs + chunk.duration)
                     .coerceAtLeast(playbackMs + 1L)
+                if (sequence == 1L || sequence % 10L == 0L || sequence == lastSegment) {
+                    Log.i(
+                        TAG,
+                        "sourceAudio SABR progress segment=$sequence/$lastSegment bytes=${output.size()}"
+                    )
+                }
             }
 
             val completed = output.toByteArray()
