@@ -94,6 +94,54 @@ internal object VotProtocol {
         write(bytes)
     }.toByteArray()
 
+    data class SubtitleEntry(
+        val language: String,
+        val url: String,
+        val translatedLanguage: String,
+        val translatedUrl: String
+    )
+
+    fun subtitlesRequest(url: String): ByteArray = ByteArrayOutputStream().apply {
+        string(this, 1, url)
+        string(this, 2, "en")
+    }.toByteArray()
+
+    /** Minimal wire decoder for the Yandex VOT /video-subtitles endpoint. */
+    fun subtitlesResponse(bytes: ByteArray): List<SubtitleEntry> {
+        val input = ByteArrayInputStream(bytes)
+        val entries = mutableListOf<SubtitleEntry>()
+        while (input.available() > 0) {
+            val outer = readVarint(input).toInt()
+            if (outer ushr 3 == 2 && outer and 7 == 2) {
+                val item = ByteArrayInputStream(nextBytes(input))
+                var lang = ""
+                var url = ""
+                var targetLang = ""
+                var targetUrl = ""
+                while (item.available() > 0) {
+                    val field = readVarint(item).toInt()
+                    when {
+                        field ushr 3 == 1 && field and 7 == 2 ->
+                            lang = nextBytes(item).toString(Charsets.UTF_8)
+                        field ushr 3 == 2 && field and 7 == 2 ->
+                            url = nextBytes(item).toString(Charsets.UTF_8)
+                        field ushr 3 == 4 && field and 7 == 2 ->
+                            targetLang = nextBytes(item).toString(Charsets.UTF_8)
+                        field ushr 3 == 5 && field and 7 == 2 ->
+                            targetUrl = nextBytes(item).toString(Charsets.UTF_8)
+                        else -> skip(item, field and 7)
+                    }
+                }
+                if (url.isNotBlank() || targetUrl.isNotBlank()) {
+                    entries += SubtitleEntry(lang, url, targetLang, targetUrl)
+                }
+            } else {
+                skip(input, outer and 7)
+            }
+        }
+        return entries
+    }
+
     private fun readVarint(input: ByteArrayInputStream): Long {
         var result = 0L
         var shift = 0
