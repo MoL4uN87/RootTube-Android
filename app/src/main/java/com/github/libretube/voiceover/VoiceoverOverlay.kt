@@ -27,6 +27,7 @@ internal class VoiceoverOverlay(
     private val main: ExoPlayer,
     scope: CoroutineScope
 ) {
+    private val contextForSettings = context.applicationContext
     private val originalVolume = main.volume
     private val dub = ExoPlayer.Builder(context).build().apply {
         setAudioAttributes(
@@ -77,7 +78,24 @@ internal class VoiceoverOverlay(
         dub.setMediaItem(MediaItem.fromUri(url))
         dub.prepare()
         dub.seekTo(main.currentPosition)
-        main.volume = (originalVolume * 0.25f).coerceAtLeast(0f)
+        setOriginalGain(VoiceoverVolumeSettings.original(contextForSettings))
+        setTranslatedGain(VoiceoverVolumeSettings.translated(contextForSettings))
+    }
+
+    /**
+     * Original sound is attenuated only while the translated track is attached.
+     * A gain of zero fully mutes the source, without affecting the dub.
+     */
+    fun setOriginalGain(gain: Float) {
+        if (closed) return
+        if (!gain.isFinite()) return
+        main.volume = originalVolume * gain.coerceIn(0f, 1f)
+    }
+
+    fun setTranslatedGain(gain: Float) {
+        if (closed) return
+        if (!gain.isFinite()) return
+        dub.volume = gain.coerceIn(0f, 1f)
     }
 
     fun release() {
