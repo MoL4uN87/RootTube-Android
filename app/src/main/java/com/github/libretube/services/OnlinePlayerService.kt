@@ -123,7 +123,7 @@ open class OnlinePlayerService : AbstractPlayerService() {
                 // Prefer the English source track when YouTube provides one.
                 // The VOT client only downloads bounded HTTPS media from
                 // known YouTube media hosts and never forwards account cookies.
-                val originalTrack = video.audioStreams
+                val orderedTracks = video.audioStreams
                     .filter { !it.url.isNullOrBlank() }
                     .sortedWith(compareBy(
                         { if (it.audioTrackLocale?.startsWith("en", ignoreCase = true) == true) 0 else 1 },
@@ -131,35 +131,41 @@ open class OnlinePlayerService : AbstractPlayerService() {
                         { if (it.contentLength in 1..(10L * 1024 * 1024)) 0 else 1 },
                         { if (it.contentLength > 0) it.contentLength else Long.MAX_VALUE }
                     ))
-                    .firstOrNull()
-                val audioCandidates = video.audioStreams
-                    .filter { !it.url.isNullOrBlank() }
-                    .sortedWith(compareBy(
-                        { if (it.audioTrackLocale?.startsWith("en", ignoreCase = true) == true) 0 else 1 },
-                        { if (it.mimeType?.contains("webm", ignoreCase = true) == true) 0 else 1 },
-                        { if (it.contentLength in 1..(10L * 1024 * 1024)) 0 else 1 },
-                        { if (it.contentLength > 0) it.contentLength else Long.MAX_VALUE }
-                    ))
-                    .mapNotNull { it.url }
-                    .distinct()
+                val audioCandidates = orderedTracks
+                    .mapNotNull { track ->
+                        track.url?.let { url ->
+                            VotClient.AudioSource(
+                                url = url,
+                                mimeType = track.mimeType,
+                                codec = track.codec,
+                                contentLength = track.contentLength,
+                                language = track.audioTrackLocale
+                            )
+                        }
+                    }
+                    .distinctBy { it.url }
                     .take(4)
+
                 Log.i(
                     "RootTube-VOT",
-                    "sourceAudio candidates=${audioCandidates.size}"
+                    "audio comparison: available=${orderedTracks.size} " +
+                        "candidates=${audioCandidates.size}"
                 )
-                Log.i(
-                    "RootTube-VOT",
-                    "selected audio: mime=${originalTrack?.mimeType ?: "unknown"} " +
-                        "codec=${originalTrack?.codec ?: "unknown"} " +
-                        "length=${originalTrack?.contentLength ?: -1} " +
-                        "language=${originalTrack?.audioTrackLocale ?: "unknown"}"
-                )
+                orderedTracks.take(8).forEachIndexed { index, track ->
+                    Log.i(
+                        "RootTube-VOT",
+                        "audio track=${index + 1} mime=${track.mimeType ?: "unknown"} " +
+                            "codec=${track.codec ?: "unknown"} " +
+                            "bytes=${track.contentLength} " +
+                            "language=${track.audioTrackLocale ?: "unknown"}"
+                    )
+                }
                 var lastProgress = ""
-                val audioUrl = VotClient().translate(
+                val audioUrl = VotClient(this@OnlinePlayerService.cacheDir).translate(
                     videoId = requestedId,
                     durationSeconds = video.duration.toDouble(),
                     title = video.title,
-                    directAudioUrls = audioCandidates,
+                    directAudioCandidates = audioCandidates,
                     onProgress = { status ->
                         if (serial == votSerial && status != lastProgress) {
                             lastProgress = status
