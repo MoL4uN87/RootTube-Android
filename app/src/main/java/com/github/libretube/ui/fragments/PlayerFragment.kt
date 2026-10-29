@@ -5,6 +5,8 @@ import android.app.Activity
 import android.app.Dialog
 import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ActivityInfo
@@ -88,6 +90,7 @@ import com.github.libretube.services.AbstractPlayerService
 import com.github.libretube.services.OfflinePlayerService
 import com.github.libretube.services.OnlinePlayerService
 import com.github.libretube.voiceover.VoiceoverVolumeSettings
+import com.github.libretube.voiceover.VideoBriefClient
 import com.github.libretube.ui.activities.AbstractPlayerHostActivity
 import com.github.libretube.ui.activities.NoInternetActivity
 import com.github.libretube.ui.adapters.VideoCardsAdapter
@@ -115,6 +118,7 @@ import com.github.libretube.util.TextUtils.toTimeInSeconds
 import com.google.android.material.snackbar.Snackbar
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.slider.Slider
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -139,6 +143,8 @@ class PlayerFragment : Fragment(R.layout.fragment_player), CustomPlayerCallback 
     private val chaptersViewModel: ChaptersViewModel by activityViewModels()
     private lateinit var playerController: MediaController
     private var votConsentGivenForSession = false
+    private var briefConsentGivenForSession = false
+    private var briefRequestRunning = false
 
     // Video information passed by the intent
     private lateinit var videoId: String
@@ -429,6 +435,7 @@ class PlayerFragment : Fragment(R.layout.fragment_player), CustomPlayerCallback 
         isOffline = playerData.isOffline
         binding.relPlayerTranslate?.let { it.isVisible = !isOffline }
         binding.relPlayerVolume?.let { it.isVisible = !isOffline }
+        binding.relPlayerBrief?.let { it.isVisible = !isOffline }
         playlistId = playerData.playlistId
         channelId = playerData.channelId
 
@@ -742,6 +749,34 @@ class PlayerFragment : Fragment(R.layout.fragment_player), CustomPlayerCallback 
             showVotAudioMixer()
         }
 
+        binding.relPlayerBrief?.setOnClickListener {
+            if (isOffline || briefRequestRunning) return@setOnClickListener
+            if (!::streams.isInitialized) {
+                Snackbar.make(binding.root, "Дождись загрузки видео", Snackbar.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            if (briefConsentGivenForSession) {
+                requestVideoBrief()
+            } else {
+                MaterialAlertDialogBuilder(requireContext())
+                    .setTitle("Пересказ по субтитрам")
+                    .setMessage(
+                        "RootTube скачает субтитры ролика с текущего сервера " +
+                            "или через VOT. Если русских субтитров нет, отдельные " +
+                            "фрагменты текста могут быть отправлены в Google Translate " +
+                            "для перевода на русский. Данные аккаунта и аудио не передаются. " +
+                            "Это автоматическая подборка ключевых моментов, а не " +
+                            "генеративный AI-пересказ; внешние сервисы могут быть недоступны."
+                    )
+                    .setNegativeButton("Отмена", null)
+                    .setPositiveButton("Продолжить") { _, _ ->
+                        briefConsentGivenForSession = true
+                        requestVideoBrief()
+                    }
+                    .show()
+            }
+        }
+
         // share button
         binding.relPlayerShare.setOnClickListener {
             if (!this::streams.isInitialized) return@setOnClickListener
@@ -835,6 +870,62 @@ class PlayerFragment : Fragment(R.layout.fragment_player), CustomPlayerCallback 
      * Two independent volume sliders. The saved gains are used automatically
      * on the next translated video; moving them also updates live playback.
      */
+    /**
+     * Creates a sourced digest from subtitles without interrupting playback.
+     * Launches within the view lifecycle so dismissed players do not leak UI.
+     */
+    private fun requestVideoBrief() {
+        if (isOffline || !::streams.isInitialized || briefRequestRunning || _binding == null) return
+        val currentId = videoId
+        val subtitleTracks = streams.subtitles.toList()
+        val duration = streams.duration
+        briefRequestRunning = true
+        binding.relPlayerBrief?.apply {
+            isEnabled = false
+            text = "Подбираем..."
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                val result = withContext(Dispatchers.IO) {
+                    VideoBriefClient().create(currentId, subtitleTracks, duration)
+                }
+                if (_binding == null || videoId != currentId) return@launch
+
+                MaterialAlertDialogBuilder(requireContext())
+                    .setTitle("Кратко по субтитрам")
+                    .setMessage(result.text)
+                    .setNeutralButton("Копировать") { _, _ ->
+                        val clipboard = requireContext().getSystemService(
+                            Context.CLIPBOARD_SERVICE
+                        ) as ClipboardManager
+                        clipboard.setPrimaryClip(
+                            ClipData.newPlainText("Пересказ $currentId", result.text)
+                        )
+                        Snackbar.make(binding.root, "Скопировано", Snackbar.LENGTH_SHORT).show()
+                    }
+                    .setPositiveButton("Закрыть", null)
+                    .show()
+            } catch (cancel: CancellationException) {
+                throw cancel
+            } catch (error: Exception) {
+                if (_binding != null && videoId == currentId) {
+                    Snackbar.make(
+                        binding.root,
+                        error.message ?: "Не удалось получить субтитры",
+                        Snackbar.LENGTH_LONG
+                    ).show()
+                }
+            } finally {
+                briefRequestRunning = false
+                _binding?.relPlayerBrief?.apply {
+                    isEnabled = true
+                    text = "Пересказать"
+                }
+            }
+        }
+    }
+
     private fun showVotAudioMixer() {
         if (isOffline || !::playerController.isInitialized) return
 
