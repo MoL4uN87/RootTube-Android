@@ -279,8 +279,12 @@ internal class VotClient {
         var audioSent = false
         var translationId = ""
         var stuckCounter = 0
+        var consecutiveServerFailures = 0
+        var expiredSessionRetries = 0
 
-        repeat(35) { attempt ->
+        // Wait for genuine in-progress translations, but stop repeating after
+        // every relay has returned the same hard failure.
+        translationLoop@ for (attempt in 0 until 35) {
             currentCoroutineContext().ensureActive()
             try {
                 val active = session()
@@ -299,6 +303,8 @@ internal class VotClient {
 
                 when {
                     result.audioRequested && !audioSent -> {
+                        consecutiveServerFailures = 0
+                        expiredSessionRetries = 0
                         // Set the flag only once the server has accepted the audio PUT.
                         onProgress("Сервер запросил исходное аудио…")
                         provideSourceAudio(
@@ -308,20 +314,45 @@ internal class VotClient {
                         stuckCounter = 0
                         delay(2000L)
                     }
-                    result.status == 0 || result.status == 7 -> {
+                    result.status == 7 -> {
+                        // Status 7 means the Yandex session must be renewed. A
+                        // different proxy cannot fix an expired cached session.
+                        lastError = IllegalStateException("Сервис запросил новую сессию (7)")
+                        session = null
+                        translationId = ""
+                        audioSent = false
+                        stuckCounter = 0
+                        if (++expiredSessionRetries >= 2) {
+                            expiredSessionRetries = 0
+                            consecutiveServerFailures++
+                            rotateHost()
+                            onProgress("Сессия не принята, проверяем другой сервер…")
+                            if (consecutiveServerFailures >= hosts.size + 1) break@translationLoop
+                        } else {
+                            onProgress("Обновляем сессию перевода…")
+                        }
+                        delay(1000L)
+                    }
+                    result.status == 0 -> {
                         lastError = IllegalStateException(
-                            result.message ?: "Сервис не может обработать это видео (status ${result.status})"
+                            result.message?.take(120)
+                                ?: "VOT отказал в обработке этого ролика (status 0)"
                         )
+                        consecutiveServerFailures++
+                        expiredSessionRetries = 0
                         rotateHost()
                         translationId = ""
                         audioSent = false
                         stuckCounter = 0
-                        onProgress("Пробуем другой сервер перевода…")
+                        if (consecutiveServerFailures >= hosts.size + 1) break@translationLoop
+                        onProgress("Видео не обработано, пробуем другой VOT-сервер…")
                         delay(1200L)
                     }
                     else -> {
-                        // A pending translation must stay on the same host/session;
-                        // rotating the host mid-job can make it start from scratch.
+                        consecutiveServerFailures = 0
+                        expiredSessionRetries = 0
+                        // In-progress translations must stay on the original
+                        // host/session; otherwise the job may restart from zero.
                         lastError = IllegalStateException(
                             result.message ?: "Ожидаем перевод (status ${result.status})"
                         )
@@ -343,11 +374,16 @@ internal class VotClient {
                 throw cancel
             } catch (error: Exception) {
                 lastError = error
+                val failedHost = host
                 rotateHost()
                 audioSent = false
                 translationId = ""
                 stuckCounter = 0
-                onProgress("Сервер недоступен, повторяем запрос…")
+                expiredSessionRetries = 0
+                consecutiveServerFailures++
+                if (consecutiveServerFailures >= hosts.size + 1) break@translationLoop
+                val detail = error.message?.take(45).orEmpty()
+                onProgress("VOT: $failedHost недоступен ($detail), ищем другой…")
                 delay(if (attempt < hosts.size) 1000L else 2500L)
             }
         }
