@@ -85,7 +85,8 @@ internal object SabrAudioFallback {
             }
 
             val init = client.getNextSegment(
-                PlaybackRequest.initRequest(format, 0L, 1.0f)
+                PlaybackRequest.initRequest(format, 0L, 1.0f),
+                preservePrefetchedSegments = true
             ) ?: error("SABR returned no init segment")
 
             if (!append(init.data)) error("SABR audio exceeds $maxBytes bytes")
@@ -120,7 +121,8 @@ internal object SabrAudioFallback {
                             segment = sequence,
                             segmentStartTimeMs = playbackMs,
                             bufferedSegments = buffered
-                        )
+                        ),
+                        preservePrefetchedSegments = true
                     )
                     if (segment != null) break
                     Log.i(
