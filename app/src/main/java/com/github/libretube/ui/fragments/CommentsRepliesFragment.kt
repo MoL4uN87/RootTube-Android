@@ -46,7 +46,7 @@ class CommentsRepliesFragment : Fragment(R.layout.fragment_comments) {
 
         val repliesAdapter = CommentsPagingAdapter(
             true,
-            requireArguments().getString(IntentData.channelAvatar),,
+            requireArguments().getString(IntentData.channelAvatar),
             commentTranslations,
             handleLink = {
                 setFragmentResult(
