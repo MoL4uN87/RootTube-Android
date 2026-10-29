@@ -5,6 +5,7 @@ import android.view.View
 import androidx.core.os.bundleOf
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.viewModels
 import androidx.fragment.app.activityViewModels
 import androidx.fragment.app.commit
 import androidx.fragment.app.replace
@@ -20,11 +21,16 @@ import com.github.libretube.extensions.formatShort
 import com.github.libretube.helpers.NavigationHelper
 import com.github.libretube.ui.adapters.CommentsPagingAdapter
 import com.github.libretube.ui.models.CommentsViewModel
+import com.github.libretube.ui.models.CommentsTranslationViewModel
 import com.github.libretube.ui.sheets.CommentsSheet
 
 class CommentsMainFragment : Fragment(R.layout.fragment_comments) {
 
     private val viewModel: CommentsViewModel by activityViewModels()
+
+    private val commentTranslations: CommentsTranslationViewModel by viewModels(
+        ownerProducer = { requireParentFragment() }
+    )
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
@@ -55,7 +61,8 @@ class CommentsMainFragment : Fragment(R.layout.fragment_comments) {
 
         val commentPagingAdapter = CommentsPagingAdapter(
             false,
-            requireArguments().getString(IntentData.channelAvatar),
+            requireArguments().getString(IntentData.channelAvatar),,
+            commentTranslations,
             handleLink = {
                 setFragmentResult(
                     CommentsSheet.HANDLE_LINK_REQUEST_KEY,
@@ -85,6 +92,15 @@ class CommentsMainFragment : Fragment(R.layout.fragment_comments) {
             },
         )
         binding.commentsRV.adapter = commentPagingAdapter
+
+        commentTranslations.enabled.observe(viewLifecycleOwner) {
+            commentPagingAdapter.notifyDataSetChanged()
+        }
+        commentTranslations.updatedCommentId.observe(viewLifecycleOwner) { id ->
+            val position = commentPagingAdapter.snapshot().items.indexOfFirst { it.commentId == id }
+            if (position >= 0) commentPagingAdapter.notifyItemChanged(position)
+        }
+
 
         commentPagingAdapter.addLoadStateListener { loadStates ->
             binding.progress.isVisible = loadStates.refresh is LoadState.Loading
