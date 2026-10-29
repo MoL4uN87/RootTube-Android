@@ -24,12 +24,17 @@ import com.github.libretube.helpers.NavigationHelper
 import com.github.libretube.ui.adapters.CommentsPagingAdapter
 import com.github.libretube.ui.models.CommentRepliesViewModel
 import com.github.libretube.ui.models.CommentsViewModel
+import com.github.libretube.ui.models.CommentsTranslationViewModel
 import com.github.libretube.ui.sheets.CommentsSheet
 
 class CommentsRepliesFragment : Fragment(R.layout.fragment_comments) {
 
     private val viewModel by viewModels<CommentRepliesViewModel> { CommentRepliesViewModel.Factory }
     private val sharedModel by activityViewModels<CommentsViewModel>()
+
+    private val commentTranslations: CommentsTranslationViewModel by viewModels(
+        ownerProducer = { requireParentFragment() }
+    )
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
@@ -41,7 +46,8 @@ class CommentsRepliesFragment : Fragment(R.layout.fragment_comments) {
 
         val repliesAdapter = CommentsPagingAdapter(
             true,
-            requireArguments().getString(IntentData.channelAvatar),
+            requireArguments().getString(IntentData.channelAvatar),,
+            commentTranslations,
             handleLink = {
                 setFragmentResult(
                     CommentsSheet.HANDLE_LINK_REQUEST_KEY,
@@ -67,6 +73,15 @@ class CommentsRepliesFragment : Fragment(R.layout.fragment_comments) {
         binding.commentsRV.layoutManager = layoutManager
 
         binding.commentsRV.adapter = repliesAdapter
+
+        commentTranslations.enabled.observe(viewLifecycleOwner) {
+            repliesAdapter.notifyDataSetChanged()
+        }
+        commentTranslations.updatedCommentId.observe(viewLifecycleOwner) { id ->
+            val position = repliesAdapter.snapshot().items.indexOfFirst { it.commentId == id }
+            if (position >= 0) repliesAdapter.notifyItemChanged(position)
+        }
+
 
         commentsSheet?.binding?.btnScrollToTop?.setOnClickListener {
             // scroll back to the top / first comment
