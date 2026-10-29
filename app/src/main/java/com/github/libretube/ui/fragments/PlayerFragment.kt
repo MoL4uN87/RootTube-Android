@@ -122,6 +122,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlin.io.path.exists
 import kotlin.math.absoluteValue
+import kotlin.math.roundToInt
 
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
@@ -858,8 +859,8 @@ class PlayerFragment : Fragment(R.layout.fragment_player), CustomPlayerCallback 
             }
         }
 
-        originalSlider.value = VoiceoverVolumeSettings.original(context).times(100f).toInt().toFloat()
-        translatedSlider.value = VoiceoverVolumeSettings.translated(context).times(100f).toInt().toFloat()
+        originalSlider.value = VoiceoverVolumeSettings.original(context).times(100f).roundToInt().toFloat()
+        translatedSlider.value = VoiceoverVolumeSettings.translated(context).times(100f).roundToInt().toFloat()
         originalValue.text = "${originalSlider.value.toInt()}%"
         translatedValue.text = "${translatedSlider.value.toInt()}%"
 
