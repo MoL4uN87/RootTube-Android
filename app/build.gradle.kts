@@ -174,6 +174,10 @@ dependencies {
     implementation(libs.coil)
     implementation(libs.coil.network.okhttp)
 
+    /* On-device comment translation */
+    implementation(libs.mlkit.translate)
+    implementation(libs.mlkit.language.id)
+
     /* Room */
     ksp(libs.room.compiler)
     implementation(libs.room)
