@@ -5,6 +5,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.Display
 import android.view.accessibility.AccessibilityEvent
 import com.github.libretube.voiceover.AliceOcrBridge
@@ -36,6 +37,7 @@ class AliceScreenRecognitionService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         connected = true
+        Log.i(TAG, "service_connected screenshot_capability_enabled")
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -43,9 +45,11 @@ class AliceScreenRecognitionService : AccessibilityService() {
         if (!AliceOcrBridge.isArmed()) return
         val packageName = event?.packageName?.toString() ?: return
         if (packageName == "com.yandex.aliceapp") {
+            if (!activeWindowIsAlice) Log.i(TAG, "alice_foreground")
             activeWindowIsAlice = true
             scheduleCheck()
         } else {
+            if (activeWindowIsAlice) Log.i(TAG, "alice_left")
             activeWindowIsAlice = false
         }
     }
@@ -72,6 +76,7 @@ class AliceScreenRecognitionService : AccessibilityService() {
         if (android.os.Build.VERSION.SDK_INT < 30) return
         val marker = AliceOcrBridge.currentMarker() ?: return
         processing = true
+        Log.i(TAG, "screenshot_requested")
         lastCaptureAt = android.os.SystemClock.elapsedRealtime()
         takeScreenshot(
             Display.DEFAULT_DISPLAY,
@@ -92,6 +97,7 @@ class AliceScreenRecognitionService : AccessibilityService() {
                         buffer.close()
                     }
                     if (software == null) {
+                        Log.w(TAG, "screenshot_bitmap_unavailable")
                         processing = false
                         scheduleCheck()
                         return
@@ -111,12 +117,19 @@ class AliceScreenRecognitionService : AccessibilityService() {
                                     val engine = requireOcrEngine()
                                     engine.setImage(crop)
                                     val pageText = engine.getUTF8Text().orEmpty()
-                                    AliceOcrParser.extract(pageText, marker)
+                                    val parsed = AliceOcrParser.extract(pageText, marker)
+                                    // Log only counts; never the contents of Alice chats.
+                                    Log.i(
+                                        TAG,
+                                        "ocr_done chars=${pageText.length} marker_hits=${pageText.windowed(marker.length).count { it == marker }} parsed=${parsed != null}"
+                                    )
+                                    parsed
                                 } finally {
                                     crop.recycle()
                                 }
                             }
-                        } catch (_: Exception) {
+                        } catch (error: Exception) {
+                            Log.e(TAG, "ocr_exception type=${error.javaClass.simpleName}")
                             ocrUnavailable = true
                             null
                         } finally {
@@ -130,7 +143,9 @@ class AliceScreenRecognitionService : AccessibilityService() {
                                     stableText = candidate
                                     stableCount = 1
                                 }
+                                Log.i(TAG, "candidate_stability count=$stableCount")
                                 if (stableCount >= 2 && AliceOcrBridge.deliver(marker, candidate)) {
+                                    Log.i(TAG, "translation_ready returning_to_caller")
                                     // Return to the calling app if Android's task stack allows.
                                     // If it does not, the user may return manually.
                                     activeWindowIsAlice = false
@@ -144,6 +159,7 @@ class AliceScreenRecognitionService : AccessibilityService() {
                 }
 
                 override fun onFailure(errorCode: Int) {
+                    Log.w(TAG, "screenshot_failed code=$errorCode")
                     processing = false
                     // Could be a secure window; never attempt alternate capture APIs.
                     scheduleCheck()
@@ -183,6 +199,7 @@ class AliceScreenRecognitionService : AccessibilityService() {
 
     override fun onDestroy() {
         connected = false
+        Log.i(TAG, "service_destroyed")
         main.removeCallbacksAndMessages(null)
         worker.execute {
             tess?.recycle()
@@ -198,6 +215,8 @@ class AliceScreenRecognitionService : AccessibilityService() {
     }
 
     companion object {
+        private const val TAG = "RootTubeAliceOCR"
+
         @Volatile
         var connected: Boolean = false
             private set
