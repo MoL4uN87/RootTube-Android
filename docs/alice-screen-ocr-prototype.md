@@ -21,6 +21,13 @@ the translation from a screenshot of the **official Yandex Browser Alice chat**
   the original prompt may no longer be visible. The answer must stabilize across two screenshots.
 - Only the matching selected comment is updated. Original YouTube comment
   text is not overwritten in the source data.
+- Before hand-off, the emoji in the source comment are replaced with visible
+  `СМАЙЛ1`, `СМАЙЛ2`, ... markers. The exact original Unicode emoji (including
+  skin tones, flags and joined sequences) are reinserted in RootTube after
+  recognition, because Cyrillic Tesseract cannot recognize emoji glyphs.
+- After recognition, the service attempts at most three Android Back actions
+  only while the Yandex app remains foreground. The attempt stops immediately
+  when RootTube resumes or the user enters another app.
 - When OCR fails, the original manual copy/paste flow is used.
 - **The selected comment itself is sent to Alice AI** via Yandex Browser;
   consult Yandex's policies for cloud-side processing.
@@ -44,7 +51,7 @@ copies the bundled model into app-private storage for Tesseract.
 3. The official Alice chat opens with a prepared translation request;
    **the user still needs to tap Send in Alice**.
 4. After a correctly marked Russian reply is recognized twice, the
-   Accessibility service attempts one Android Back action; RootTube
+   Accessibility service attempts a bounded Android Back sequence; RootTube
    fills that selected comment on resume.
 5. If any of these checks fail, manually copy the answer and import it
    using the old `Из буфера` or manual paste dialog.
