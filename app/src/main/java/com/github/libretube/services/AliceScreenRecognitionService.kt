@@ -16,7 +16,8 @@ import java.util.concurrent.Executors
 
 /**
  * User-opt-in Accessibility Service. Capture happens only when the user has
- * requested one specific Alice translation, only while com.yandex.aliceapp is
+ * requested one specific Alice translation, only while the Yandex Browser
+ * (the official share-to-Alice target) or the dedicated Alice app is
  * foreground, and stops after a brief timeout or successful OCR result.
  *
  * No screenshots or chat text are saved or transmitted. The recognized result
@@ -26,6 +27,7 @@ class AliceScreenRecognitionService : AccessibilityService() {
     private val main = Handler(Looper.getMainLooper())
     private val worker = Executors.newSingleThreadExecutor()
     @Volatile private var activeWindowIsAlice = false
+    private var previousJobMarker: String? = null
     private var scheduled = false
     private var processing = false
     private var stableText: String? = null
@@ -42,24 +44,41 @@ class AliceScreenRecognitionService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        // Never inspect event contents outside one explicitly requested job.
-        if (!AliceOcrBridge.isArmed()) return
+        // No screenshot without an explicit, currently armed Alice request.
+        val marker = AliceOcrBridge.currentMarker() ?: return
+        if (previousJobMarker != marker) {
+            previousJobMarker = marker
+            stableText = null
+            stableCount = 0
+            ocrUnavailable = false
+            lastEventLogged = null
+            Log.i(TAG, "new_request_armed")
+        }
         val packageName = event?.packageName?.toString() ?: "unknown"
         val type = event?.eventType ?: 0
         val signature = "$packageName:$type"
         if (signature != lastEventLogged) {
-            // Diagnostic metadata only. No UI text, identifiers or screenshot data.
+            // Diagnostic metadata only. Never log event text or screen contents.
             Log.i(TAG, "accessibility_event package=$packageName type=$type")
             lastEventLogged = signature
         }
 
-        if (packageName == "com.yandex.aliceapp") {
-            if (!activeWindowIsAlice) Log.i(TAG, "alice_foreground")
+        // ACTION_SEND opens the official Yandex Browser Alice chat. On this
+        // handset the browser remains foreground (com.yandex.browser),
+        // so watching only com.yandex.aliceapp prevented *all* OCR requests.
+        if (packageName == "com.yandex.browser" ||
+            packageName == "com.yandex.aliceapp"
+        ) {
+            if (!activeWindowIsAlice) {
+                Log.i(TAG, "alice_foreground package=$packageName")
+            }
             activeWindowIsAlice = true
             scheduleCheck()
         } else if (
-            type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ||
-            type == AccessibilityEvent.TYPE_WINDOWS_CHANGED
+            packageName != "com.android.systemui" &&
+            packageName != "unknown" &&
+            (type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ||
+                type == AccessibilityEvent.TYPE_WINDOWS_CHANGED)
         ) {
             if (activeWindowIsAlice) Log.i(TAG, "alice_left package=$packageName")
             activeWindowIsAlice = false
@@ -119,8 +138,8 @@ class AliceScreenRecognitionService : AccessibilityService() {
                             if (!AliceOcrBridge.isArmed() || !activeWindowIsAlice) null
                             else {
                                 val sourceHeight = software.height
-                                val y = (sourceHeight * 0.08).toInt()
-                                val height = (sourceHeight * 0.76).toInt()
+                                val y = (sourceHeight * 0.05).toInt()
+                                val height = (sourceHeight * 0.88).toInt()
                                     .coerceAtMost(sourceHeight - y)
                                 val crop = Bitmap.createBitmap(
                                     software, 0, y, software.width, height
