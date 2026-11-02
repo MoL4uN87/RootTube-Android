@@ -57,32 +57,58 @@ object AliceOcrBridge {
 }
 
 /**
- * Pull only the Russian reply below the *second* occurrence of a random code:
- * the first belongs to our prompt bubble, the second to Alice's answer.
- * Never accept text from unrelated screens or a still-unanswered request.
+ * Extract a translation only after the Alice reply's dedicated marker line.
+ * Unlike the previous implementation, the original prompt need not be on
+ * screen: it can be scrolled away. Never accept a marker embedded in the
+ * prompt instruction or a reply that does not contain the marker line.
  */
 object AliceOcrParser {
+    private val footerPrefixes = listOf(
+        "Спросите о чём угодно",
+        "Спросите о чем угодно",
+        "Интеллект:",
+        "Ответить",
+        "Поделиться",
+        "Копировать",
+        "Слушать",
+        "Новый чат",
+        "Алиса AI"
+    )
+
     fun extract(screenText: String, marker: String): String? {
         if (!marker.matches(Regex("[0-9]{8}"))) return null
-        val normalized = screenText.replace('\r', '\n')
-        val indices = Regex(Regex.escape(marker)).findAll(normalized).toList()
-        if (indices.size != 2) return null
-        val after = normalized.substring(indices[1].range.last + 1)
-            .trimStart(' ', ':', '.', '-', '—', '\n', '\t')
-        val answer = after.lineSequence()
+        val normalized = screenText.replace('\\r', '\\n')
+        // Only a stand-alone code line belongs to a completed response.
+        // The user's prompt mentions the code inside an instruction sentence.
+        val codeLine = Regex(
+            "(?m)^\\\\s*(?:КОД|Код|код|CODE)\\\\s*[:#-]?\\\\s*" +
+                Regex.escape(marker) + "\\\\s*[.:—-]?\\\\s*$"
+        )
+        val matches = codeLine.findAll(normalized).toList()
+        if (matches.size != 1) return null
+
+        val lines = normalized.substring(matches[0].range.last + 1)
+            .lineSequence()
+            .map { it.trim() }
+            .dropWhile { it.isBlank() }
             .takeWhile { line ->
-                val t = line.trim()
-                !t.startsWith("Спросите о чём угодно", ignoreCase = true) &&
-                    !t.startsWith("Спросите о чем угодно", ignoreCase = true) &&
-                    !t.startsWith("Интеллект:", ignoreCase = true) &&
-                    !t.startsWith("Ответить", ignoreCase = true)
+                footerPrefixes.none { line.startsWith(it, ignoreCase = true) }
             }
-            .joinToString(" ")
-            .replace(Regex("\\s+"), " ")
+            .take(10)
+            .filter { it.isNotBlank() }
+            .toList()
+        val answer = lines.joinToString(" ")
+            .replace(Regex("\\\\s+"), " ")
             .trim()
+
         if (answer.length !in 8..2500) return null
-        if (answer.count { it in 'А'..'я' || it == 'ё' || it == 'Ё' } < 4) return null
-        if (answer.contains(marker) || answer.contains("Переведи следующий комментарий")) return null
+        val russianLetters = answer.count { it in 'А'..'я' || it == 'ё' || it == 'Ё' }
+        if (russianLetters < 4 || russianLetters * 3 < answer.count { it.isLetter() }) return null
+        if (answer.contains(marker) ||
+            answer.contains("Переведи следующий комментарий", ignoreCase = true) ||
+            answer.contains("Напиши только перевод", ignoreCase = true) ||
+            answer.contains("Начни ответ", ignoreCase = true)
+        ) return null
         return answer
     }
 }
