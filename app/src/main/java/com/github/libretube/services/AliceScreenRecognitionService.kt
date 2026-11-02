@@ -24,7 +24,7 @@ import java.util.concurrent.Executors
 class AliceScreenRecognitionService : AccessibilityService() {
     private val main = Handler(Looper.getMainLooper())
     private val worker = Executors.newSingleThreadExecutor()
-    private var activeWindowIsAlice = false
+    @Volatile private var activeWindowIsAlice = false
     private var scheduled = false
     private var processing = false
     private var stableText: String? = null
@@ -45,7 +45,7 @@ class AliceScreenRecognitionService : AccessibilityService() {
         if (packageName == "com.yandex.aliceapp") {
             activeWindowIsAlice = true
             scheduleCheck()
-        } else if (packageName != "com.yandex.browser") {
+        } else {
             activeWindowIsAlice = false
         }
     }
@@ -98,7 +98,7 @@ class AliceScreenRecognitionService : AccessibilityService() {
                     }
                     worker.execute {
                         val candidate = try {
-                            if (!AliceOcrBridge.isArmed()) null
+                            if (!AliceOcrBridge.isArmed() || !activeWindowIsAlice) null
                             else {
                                 val sourceHeight = software.height
                                 val y = (sourceHeight * 0.08).toInt()
