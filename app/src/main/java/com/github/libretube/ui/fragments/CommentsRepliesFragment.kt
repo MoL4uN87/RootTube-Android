@@ -60,7 +60,8 @@ class CommentsRepliesFragment : Fragment(R.layout.fragment_comments) {
             navigateToChannel = { comment ->
                 NavigationHelper.navigateChannel(view.context, comment.commentorUrl)
                 setFragmentResult(CommentsSheet.DISMISS_SHEET_REQUEST_KEY, Bundle.EMPTY)
-            }
+            },
+            requestAlice = { comment -> commentsSheet?.requestAliceTranslation(comment) }
         )
         commentsSheet?.updateFragmentInfo(
             true,
