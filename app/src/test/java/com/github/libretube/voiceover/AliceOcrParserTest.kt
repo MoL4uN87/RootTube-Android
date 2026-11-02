@@ -8,9 +8,9 @@ class AliceOcrParserTest {
     private val code = "48391274"
 
     @Test
-    fun extractsOnlyTheReplyAfterTwoMarkers() {
+    fun extractsOnlyTheReplyAfterPromptAndAnswerMarkers() {
         val screen = """
-            алиса ai
+            Алиса AI
             Переведи комментарий. Начни ответ с КОД $code
             This lecture is very useful.
             КОД $code
@@ -22,27 +22,38 @@ class AliceOcrParserTest {
     }
 
     @Test
-    fun doesNotReadAnUnansweredPrompt() {
-        assertNull(AliceOcrParser.extract("Начни ответ с КОД $code", code))
+    fun acceptsAnswerWhenOriginalPromptIsNoLongerVisible() {
+        val screen = "Алиса AI\nКОД $code\nЭто действительно отличный курс!\nСпросите о чём угодно"
+        assertEquals("Это действительно отличный курс!", AliceOcrParser.extract(screen, code))
     }
 
     @Test
-    fun neverReadsAnotherJob() {
-        val screen = "КОД 12345678\nКОД 12345678\nРусский текст"
+    fun doesNotAcceptCodeMentionedOnlyInPrompt() {
+        val screen = "Начни ответ с отдельной строки КОД $code, затем переведи\nПривет, мир"
         assertNull(AliceOcrParser.extract(screen, code))
     }
 
     @Test
-    fun rejectsTextThatIsNotRussian() {
+    fun doesNotReadAnotherRequest() {
+        assertNull(AliceOcrParser.extract("КОД 12345678\nПеревод на русский", code))
+    }
+
+    @Test
+    fun rejectsNonRussianResponse() {
+        assertNull(AliceOcrParser.extract("КОД $code\nHello world", code))
+    }
+
+    @Test
+    fun rejectsTwoStandaloneAnswerMarkers() {
         assertNull(AliceOcrParser.extract(
-            "КОД $code\nКОД $code\nHello world", code
+            "КОД $code\nЭто русский перевод\nКОД $code\nДругой русский перевод", code
         ))
     }
 
     @Test
-    fun rejectsTooManyMarkersInLongConversation() {
+    fun rejectsMarkerEmbeddedInOtherText() {
         assertNull(AliceOcrParser.extract(
-            "КОД $code\nКОД $code\nКОД $code\nПеревод на русский", code
+            "Некоторый текст КОД $code\nЭто точно не проверенный перевод", code
         ))
     }
 }
