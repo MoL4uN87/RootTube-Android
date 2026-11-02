@@ -160,6 +160,8 @@ class CommentsSheet : ExpandablePlayerSheet(R.layout.comments_sheet) {
 
     override fun onResume() {
         super.onResume()
+        // Stop any pending automated Back actions as soon as RootTube is back.
+        AliceScreenRecognitionService.notifyRootTubeResumed()
         Log.i(TAG, "sheet_resumed awaiting=$awaitingAliceReturn pending=${commentTranslations.pendingAlice != null} binding=${_binding != null}")
         if (awaitingAliceReturn && commentTranslations.pendingAlice != null) {
             awaitingAliceReturn = false
