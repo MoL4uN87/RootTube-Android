@@ -31,3 +31,6 @@ google-services.json
 # Android Profiling
 *.hprof
 .DS_Store
+
+# Locally downloaded Tesseract Cyrillic OCR model (not stored in GitHub)
+app/src/main/assets/tessdata/*.traineddata
