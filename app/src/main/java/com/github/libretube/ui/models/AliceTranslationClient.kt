@@ -77,7 +77,7 @@ internal object AliceTranslationClient {
                 conn.requestMethod = "POST"
                 conn.instanceFollowRedirects = false
                 conn.connectTimeout = 10_000
-                conn.readTimeout = 25_000
+                conn.readTimeout = 40_000
                 conn.doOutput = true
                 conn.setRequestProperty("Content-Type", "application/json; charset=utf-8")
                 conn.setRequestProperty("Accept", "application/json")
