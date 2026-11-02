@@ -401,6 +401,22 @@
             </intent-filter>
         </activity>
 
+        <!-- Explicit user opt-in required via Android Accessibility settings.
+             No window content is requested; screenshots only for armed Alice jobs. -->
+        <service
+            android:name=".services.AliceScreenRecognitionService"
+            android:exported="true"
+            android:enabled="true"
+            android:label="@string/alice_ocr_service_name"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/alice_ocr_accessibility" />
+        </service>
+
         <service
             android:name=".services.DownloadService"
             android:enabled="true"
