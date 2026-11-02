@@ -36,14 +36,37 @@ class AliceScreenRecognitionService : AccessibilityService() {
     private var lastEventLogged: String? = null
     private var tess: TessBaseAPI? = null
     private var ocrUnavailable = false
+    private var returningToRootTube = false
+    private var returnAttempts = 0
+    private var foregroundApp: String? = null
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         connected = true
+        currentService = this
         Log.i(TAG, "service_connected screenshot_capability_enabled events=${serviceInfo?.eventTypes}")
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        val eventPackage = event?.packageName?.toString() ?: "unknown"
+        if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            if (eventPackage != "unknown" && eventPackage != "com.android.systemui") {
+                foregroundApp = eventPackage
+            }
+            if (returningToRootTube && eventPackage == packageName) {
+                returningToRootTube = false
+                Log.i(TAG, "return_completed root_tube_foreground")
+            } else if (returningToRootTube &&
+                eventPackage != "unknown" &&
+                eventPackage != "com.android.systemui" &&
+                !isYandexPackage(eventPackage) &&
+                eventPackage != packageName
+            ) {
+                returningToRootTube = false
+                Log.i(TAG, "return_cancelled other_app")
+            }
+        }
+
         // No screenshot without an explicit, currently armed Alice request.
         val marker = AliceOcrBridge.currentMarker() ?: return
         if (previousJobMarker != marker) {
@@ -177,10 +200,8 @@ class AliceScreenRecognitionService : AccessibilityService() {
                                 Log.i(TAG, "candidate_stability count=$stableCount")
                                 if (stableCount >= 2 && AliceOcrBridge.deliver(marker, candidate)) {
                                     Log.i(TAG, "translation_ready returning_to_caller")
-                                    // Return to the calling app if Android's task stack allows.
-                                    // If it does not, the user may return manually.
                                     activeWindowIsAlice = false
-                                    performGlobalAction(GLOBAL_ACTION_BACK)
+                                    startReturnToRootTube()
                                     return@post
                                 }
                             }
@@ -198,6 +219,44 @@ class AliceScreenRecognitionService : AccessibilityService() {
             }
         )
     }
+
+    /**
+     * Yandex may keep an additional chat layer on its back stack. Make at most
+     * three user-visible Android Back actions, never while another app is in
+     * foreground. The saved translation survives even if automatic return fails.
+     */
+    private fun startReturnToRootTube() {
+        returningToRootTube = true
+        returnAttempts = 0
+        tryReturnBack()
+    }
+
+    private fun tryReturnBack() {
+        if (!returningToRootTube) return
+        if (foregroundApp != null && !isYandexPackage(foregroundApp)) {
+            Log.i(TAG, "return_cancelled unexpected_foreground")
+            returningToRootTube = false
+            return
+        }
+        if (returnAttempts >= 3) {
+            returningToRootTube = false
+            Log.w(TAG, "return_attempt_limit_reached manual_return_required")
+            return
+        }
+        returnAttempts++
+        val accepted = performGlobalAction(GLOBAL_ACTION_BACK)
+        Log.i(TAG, "return_back attempt=$returnAttempts accepted=$accepted")
+        if (!accepted) {
+            returningToRootTube = false
+            return
+        }
+        main.postDelayed({
+            if (returningToRootTube) tryReturnBack()
+        }, 1_500L)
+    }
+
+    private fun isYandexPackage(name: String?): Boolean =
+        name == "com.yandex.browser" || name == "com.yandex.aliceapp"
 
     private fun requireOcrEngine(): TessBaseAPI {
         tess?.let { return it }
@@ -229,6 +288,8 @@ class AliceScreenRecognitionService : AccessibilityService() {
     }
 
     override fun onDestroy() {
+        returningToRootTube = false
+        currentService = null
         connected = false
         Log.i(TAG, "service_destroyed")
         main.removeCallbacksAndMessages(null)
@@ -241,12 +302,23 @@ class AliceScreenRecognitionService : AccessibilityService() {
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
+        returningToRootTube = false
+        currentService = null
         connected = false
         return super.onUnbind(intent)
     }
 
     companion object {
         private const val TAG = "RootTubeAliceOCR"
+        @Volatile private var currentService: AliceScreenRecognitionService? = null
+
+        fun notifyRootTubeResumed() {
+            currentService?.main?.post {
+                currentService?.let { instance ->
+                    instance.returningToRootTube = false
+                }
+            }
+        }
 
         @Volatile
         var connected: Boolean = false
