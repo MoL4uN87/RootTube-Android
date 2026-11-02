@@ -7,6 +7,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings
 import android.text.InputType
+import android.util.Log
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.Toast
@@ -126,6 +127,7 @@ class CommentsSheet : ExpandablePlayerSheet(R.layout.comments_sheet) {
 
     private fun launchAliceTranslation(comment: Comment, enableOcr: Boolean) {
         val prompt = commentTranslations.prepareAlice(comment) ?: return
+        Log.i(TAG, "alice_handoff prepared ocr=$enableOcr")
         val marker = commentTranslations.pendingAlice?.marker ?: return
         if (enableOcr) AliceOcrBridge.arm(marker)
         val intent = Intent(Intent.ACTION_SEND).apply {
@@ -136,6 +138,7 @@ class CommentsSheet : ExpandablePlayerSheet(R.layout.comments_sheet) {
         try {
             startActivity(intent)
             awaitingAliceReturn = true
+            Log.i(TAG, "alice_handoff activity_started")
         } catch (_: ActivityNotFoundException) {
             AliceOcrBridge.clear()
             commentTranslations.clearPendingAlice()
@@ -157,12 +160,17 @@ class CommentsSheet : ExpandablePlayerSheet(R.layout.comments_sheet) {
 
     override fun onResume() {
         super.onResume()
+        Log.i(TAG, "sheet_resumed awaiting=$awaitingAliceReturn pending=${commentTranslations.pendingAlice != null} binding=${_binding != null}")
         if (awaitingAliceReturn && commentTranslations.pendingAlice != null) {
             awaitingAliceReturn = false
             _binding?.root?.post {
-                if (!isAdded || _binding == null) return@post
+                if (!isAdded || _binding == null) {
+                    Log.w(TAG, "sheet_resume_no_binding")
+                    return@post
+                }
                 val marker = commentTranslations.pendingAlice?.marker
                 val automaticallyRead = marker?.let { AliceOcrBridge.consume(it) }
+                Log.i(TAG, "sheet_ocr_result available=${automaticallyRead != null}")
                 if (automaticallyRead != null &&
                     commentTranslations.applyCopiedAlice(automaticallyRead)
                 ) {
@@ -174,6 +182,7 @@ class CommentsSheet : ExpandablePlayerSheet(R.layout.comments_sheet) {
                 } else {
                     // Backwards-compatible manual fallback if OCR could not
                     // safely identify the response.
+                    Log.i(TAG, "sheet_show_manual_fallback")
                     showAlicePasteDialog()
                 }
             }
@@ -284,6 +293,7 @@ class CommentsSheet : ExpandablePlayerSheet(R.layout.comments_sheet) {
 
 
     override fun onDestroyView() {
+        Log.i(TAG, "sheet_view_destroyed pending=${commentTranslations.pendingAlice != null}")
         super.onDestroyView()
         _binding = null
     }
@@ -301,6 +311,7 @@ class CommentsSheet : ExpandablePlayerSheet(R.layout.comments_sheet) {
     }
 
     companion object {
+        private const val TAG = "RootTubeAliceOCR"
         const val HANDLE_LINK_REQUEST_KEY = "handle_link_request_key"
         const val DISMISS_SHEET_REQUEST_KEY = "dismiss_sheet_request_key"
     }
