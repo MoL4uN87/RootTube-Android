@@ -3,6 +3,10 @@ package com.github.libretube.ui.sheets
 import android.os.Bundle
 import android.view.View
 import android.view.WindowManager
+import android.text.InputType
+import android.widget.EditText
+import android.widget.LinearLayout
+import androidx.appcompat.app.AlertDialog
 import androidx.activity.ComponentDialog
 import androidx.activity.addCallback
 import androidx.core.view.isVisible
@@ -16,6 +20,7 @@ import com.github.libretube.databinding.CommentsSheetBinding
 import com.github.libretube.ui.fragments.CommentsMainFragment
 import com.github.libretube.ui.models.CommonPlayerViewModel
 import com.github.libretube.ui.models.CommentsTranslationViewModel
+import com.github.libretube.ui.models.AliceTranslationClient
 
 class CommentsSheet : ExpandablePlayerSheet(R.layout.comments_sheet) {
     private var _binding: CommentsSheetBinding? = null
@@ -54,20 +59,87 @@ class CommentsSheet : ExpandablePlayerSheet(R.layout.comments_sheet) {
         binding.btnClose.setOnClickListener { dismiss() }
 
         binding.btnTranslateComments.setOnClickListener { commentTranslations.toggle() }
-        commentTranslations.enabled.observe(viewLifecycleOwner) { translated ->
+        binding.btnTranslateAlice.setOnClickListener {
+            if (commentTranslations.mode.value == CommentsTranslationViewModel.Mode.ALICE) {
+                commentTranslations.toggleAlice()
+            } else if (AliceTranslationClient.isConfigured(requireContext())) {
+                commentTranslations.toggleAlice()
+            } else {
+                configureAlice()
+            }
+        }
+        binding.btnTranslateAlice.setOnLongClickListener {
+            configureAlice()
+            true
+        }
+        commentTranslations.mode.observe(viewLifecycleOwner) { mode ->
             binding.btnTranslateComments.text = getString(
-                if (translated) R.string.comments_translate_original
+                if (mode == CommentsTranslationViewModel.Mode.RU)
+                    R.string.comments_translate_original
                 else R.string.comments_translate_ru
             )
-            binding.btnTranslateComments.tooltipText = getString(
-                if (translated) R.string.comments_translate_original_tooltip
-                else R.string.comments_translate_tooltip
+            binding.btnTranslateComments.isSelected = mode == CommentsTranslationViewModel.Mode.RU
+            binding.btnTranslateAlice.text = getString(
+                if (mode == CommentsTranslationViewModel.Mode.ALICE)
+                    R.string.comments_translate_alice_active
+                else R.string.comments_translate_alice_button
             )
+            binding.btnTranslateAlice.isSelected = mode == CommentsTranslationViewModel.Mode.ALICE
         }
 
         childFragmentManager.commit {
             replace<CommentsMainFragment>(R.id.commentFragContainer, args = arguments)
         }
+    }
+
+
+    /**
+     * AI+ uses a user-configured endpoint. The Yandex Cloud API key is never
+     * entered into RootTube; only a separately revocable proxy access token.
+     */
+    private fun configureAlice() {
+        val context = requireContext()
+        val density = resources.displayMetrics.density
+        val padding = (20 * density).toInt()
+        val fields = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(padding, (8 * density).toInt(), padding, 0)
+        }
+        val urlField = EditText(context).apply {
+            hint = getString(R.string.comments_translate_alice_config_url)
+            setSingleLine(true)
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
+            setText(AliceTranslationClient.getBaseUrl(context))
+        }
+        val tokenField = EditText(context).apply {
+            hint = getString(R.string.comments_translate_alice_config_token)
+            setSingleLine(true)
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+        }
+        fields.addView(urlField)
+        fields.addView(tokenField)
+
+        val dialog = AlertDialog.Builder(context)
+            .setTitle(R.string.comments_translate_alice_config_title)
+            .setMessage(R.string.comments_translate_alice_config_message)
+            .setView(fields)
+            .setNegativeButton(R.string.comments_translate_alice_cancel, null)
+            .setPositiveButton(R.string.comments_translate_alice_save, null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                try {
+                    AliceTranslationClient.save(
+                        context, urlField.text.toString(), tokenField.text.toString()
+                    )
+                    commentTranslations.toggleAlice()
+                    dialog.dismiss()
+                } catch (_: Exception) {
+                    tokenField.error = getString(R.string.comments_translate_alice_config_error)
+                }
+            }
+        }
+        dialog.show()
     }
 
     override fun onStart() {
