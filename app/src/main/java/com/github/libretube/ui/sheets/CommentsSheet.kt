@@ -154,7 +154,7 @@ class CommentsSheet : ExpandablePlayerSheet(R.layout.comments_sheet) {
                 InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
             minLines = 2
             maxLines = 7
-            isSingleLine = false
+            setSingleLine(false)
         }
         val container = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
