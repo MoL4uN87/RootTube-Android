@@ -62,7 +62,8 @@ class CommentsPagingAdapter(
                 clickEventConsumedByLinkHandler = true
                 handleLink.invoke(it)
             }
-            val translatedMode = commentTranslations.enabled.value == true
+            val translationMode = commentTranslations.mode.value ?: CommentsTranslationViewModel.Mode.ORIGINAL
+            val translatedMode = translationMode != CommentsTranslationViewModel.Mode.ORIGINAL
             val result = if (translatedMode) commentTranslations.resultFor(comment) else null
             if (result is CommentsTranslationViewModel.Result.Translated) {
                 commentText.text = result.text
@@ -72,16 +73,22 @@ class CommentsPagingAdapter(
             }
 
             translationStatus.isVisible = translatedMode && comment.commentText?.isNotBlank() == true &&
-                (result == null || result == CommentsTranslationViewModel.Result.Failed)
+                (translationMode == CommentsTranslationViewModel.Mode.ALICE ||
+                    result == null || result == CommentsTranslationViewModel.Result.Failed)
             if (translationStatus.isVisible) {
                 translationStatus.setText(
-                    if (result == CommentsTranslationViewModel.Result.Failed)
-                        R.string.comments_translate_unavailable
-                    else R.string.comments_translate_loading
+                    when {
+                        result == CommentsTranslationViewModel.Result.Failed ->
+                            R.string.comments_translate_unavailable
+                        result is CommentsTranslationViewModel.Result.Translated &&
+                            translationMode == CommentsTranslationViewModel.Mode.ALICE ->
+                            R.string.comments_translate_alice_attribution
+                        else -> R.string.comments_translate_loading
+                    }
                 )
             }
             if (translatedMode && result == null) {
-                commentTranslations.request(comment)
+                commentTranslations.request(comment, root.context)
             }
 
             ImageHelper.loadImage(comment.thumbnail, commentorImage, true)
