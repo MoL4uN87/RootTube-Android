@@ -76,8 +76,8 @@ class AliceScreenRecognitionService : AccessibilityService() {
         takeScreenshot(
             Display.DEFAULT_DISPLAY,
             mainExecutor,
-            object : TakeScreenshotCallback {
-                override fun onSuccess(result: ScreenshotResult) {
+            object : AccessibilityService.TakeScreenshotCallback {
+                override fun onSuccess(result: AccessibilityService.ScreenshotResult) {
                     val buffer = result.hardwareBuffer
                     val software = try {
                         val hardwareBitmap = Bitmap.wrapHardwareBuffer(
