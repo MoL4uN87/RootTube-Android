@@ -1,12 +1,12 @@
 package com.github.libretube.ui.sheets
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.widget.Toast
 import android.view.View
 import android.view.WindowManager
-import android.text.InputType
-import android.widget.EditText
-import android.widget.LinearLayout
-import androidx.appcompat.app.AlertDialog
 import androidx.activity.ComponentDialog
 import androidx.activity.addCallback
 import androidx.core.view.isVisible
@@ -19,14 +19,15 @@ import com.github.libretube.R
 import com.github.libretube.databinding.CommentsSheetBinding
 import com.github.libretube.ui.fragments.CommentsMainFragment
 import com.github.libretube.ui.models.CommonPlayerViewModel
+import com.github.libretube.ui.models.CommentsViewModel
 import com.github.libretube.ui.models.CommentsTranslationViewModel
-import com.github.libretube.ui.models.AliceTranslationClient
 
 class CommentsSheet : ExpandablePlayerSheet(R.layout.comments_sheet) {
     private var _binding: CommentsSheetBinding? = null
     val binding get() = _binding!!
 
     private val commonPlayerViewModel: CommonPlayerViewModel by activityViewModels()
+    private val commentsViewModel: CommentsViewModel by activityViewModels()
     private val commentTranslations: CommentsTranslationViewModel by viewModels()
 
     private val backPressedCallback by lazy(LazyThreadSafetyMode.NONE) {
@@ -59,32 +60,16 @@ class CommentsSheet : ExpandablePlayerSheet(R.layout.comments_sheet) {
         binding.btnClose.setOnClickListener { dismiss() }
 
         binding.btnTranslateComments.setOnClickListener { commentTranslations.toggle() }
-        binding.btnTranslateAlice.setOnClickListener {
-            if (commentTranslations.mode.value == CommentsTranslationViewModel.Mode.ALICE) {
-                commentTranslations.toggleAlice()
-            } else if (AliceTranslationClient.isConfigured(requireContext())) {
-                commentTranslations.toggleAlice()
-            } else {
-                configureAlice()
-            }
-        }
-        binding.btnTranslateAlice.setOnLongClickListener {
-            configureAlice()
-            true
-        }
-        commentTranslations.mode.observe(viewLifecycleOwner) { mode ->
+        binding.btnOpenYandex.setOnClickListener { openVideoInYandex() }
+        commentTranslations.enabled.observe(viewLifecycleOwner) { translated ->
             binding.btnTranslateComments.text = getString(
-                if (mode == CommentsTranslationViewModel.Mode.RU)
-                    R.string.comments_translate_original
+                if (translated) R.string.comments_translate_original
                 else R.string.comments_translate_ru
             )
-            binding.btnTranslateComments.isSelected = mode == CommentsTranslationViewModel.Mode.RU
-            binding.btnTranslateAlice.text = getString(
-                if (mode == CommentsTranslationViewModel.Mode.ALICE)
-                    R.string.comments_translate_alice_active
-                else R.string.comments_translate_alice_button
+            binding.btnTranslateComments.tooltipText = getString(
+                if (translated) R.string.comments_translate_original_tooltip
+                else R.string.comments_translate_tooltip
             )
-            binding.btnTranslateAlice.isSelected = mode == CommentsTranslationViewModel.Mode.ALICE
         }
 
         childFragmentManager.commit {
@@ -92,54 +77,44 @@ class CommentsSheet : ExpandablePlayerSheet(R.layout.comments_sheet) {
         }
     }
 
-
     /**
-     * AI+ uses a user-configured endpoint. The Yandex Cloud API key is never
-     * entered into RootTube; only a separately revocable proxy access token.
+     * The free Alice translation in Yandex Browser is a browser-only feature,
+     * not a public API. Open the same video in the official browser so the user
+     * can use its built-in page/selection translation; nothing is scraped.
      */
-    private fun configureAlice() {
-        val context = requireContext()
-        val density = resources.displayMetrics.density
-        val padding = (20 * density).toInt()
-        val fields = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(padding, (8 * density).toInt(), padding, 0)
+    private fun openVideoInYandex() {
+        val videoId = commentsViewModel.videoIdLiveData.value
+        if (videoId == null || !videoId.matches(Regex("[A-Za-z0-9_-]{11}"))) {
+            Toast.makeText(
+                requireContext(),
+                R.string.comments_yandex_no_video,
+                Toast.LENGTH_SHORT
+            ).show()
+            return
         }
-        val urlField = EditText(context).apply {
-            hint = getString(R.string.comments_translate_alice_config_url)
-            setSingleLine(true)
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
-            setText(AliceTranslationClient.getBaseUrl(context))
+        val videoUrl = Uri.Builder()
+            .scheme("https")
+            .authority("m.youtube.com")
+            .path("/watch")
+            .appendQueryParameter("v", videoId)
+            .build()
+        val intent = Intent(Intent.ACTION_VIEW, videoUrl)
+            .setPackage("com.yandex.browser")
+            .addCategory(Intent.CATEGORY_BROWSABLE)
+        try {
+            startActivity(intent)
+            Toast.makeText(
+                requireContext(),
+                R.string.comments_yandex_tip,
+                Toast.LENGTH_LONG
+            ).show()
+        } catch (_: ActivityNotFoundException) {
+            Toast.makeText(
+                requireContext(),
+                R.string.comments_yandex_not_installed,
+                Toast.LENGTH_LONG
+            ).show()
         }
-        val tokenField = EditText(context).apply {
-            hint = getString(R.string.comments_translate_alice_config_token)
-            setSingleLine(true)
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-        }
-        fields.addView(urlField)
-        fields.addView(tokenField)
-
-        val dialog = AlertDialog.Builder(context)
-            .setTitle(R.string.comments_translate_alice_config_title)
-            .setMessage(R.string.comments_translate_alice_config_message)
-            .setView(fields)
-            .setNegativeButton(R.string.comments_translate_alice_cancel, null)
-            .setPositiveButton(R.string.comments_translate_alice_save, null)
-            .create()
-        dialog.setOnShowListener {
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                try {
-                    AliceTranslationClient.save(
-                        context, urlField.text.toString(), tokenField.text.toString()
-                    )
-                    commentTranslations.toggleAlice()
-                    dialog.dismiss()
-                } catch (_: Exception) {
-                    tokenField.error = getString(R.string.comments_translate_alice_config_error)
-                }
-            }
-        }
-        dialog.show()
     }
 
     override fun onStart() {
