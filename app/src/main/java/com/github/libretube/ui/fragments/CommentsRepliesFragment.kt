@@ -74,7 +74,7 @@ class CommentsRepliesFragment : Fragment(R.layout.fragment_comments) {
 
         binding.commentsRV.adapter = repliesAdapter
 
-        commentTranslations.enabled.observe(viewLifecycleOwner) {
+        commentTranslations.mode.observe(viewLifecycleOwner) {
             repliesAdapter.notifyDataSetChanged()
         }
         commentTranslations.updatedCommentId.observe(viewLifecycleOwner) { id ->
