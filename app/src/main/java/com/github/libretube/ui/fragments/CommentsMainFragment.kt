@@ -93,7 +93,7 @@ class CommentsMainFragment : Fragment(R.layout.fragment_comments) {
         )
         binding.commentsRV.adapter = commentPagingAdapter
 
-        commentTranslations.enabled.observe(viewLifecycleOwner) {
+        commentTranslations.mode.observe(viewLifecycleOwner) {
             commentPagingAdapter.notifyDataSetChanged()
         }
         commentTranslations.updatedCommentId.observe(viewLifecycleOwner) { id ->
