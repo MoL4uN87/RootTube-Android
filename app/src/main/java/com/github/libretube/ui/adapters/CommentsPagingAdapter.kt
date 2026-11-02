@@ -30,6 +30,7 @@ class CommentsPagingAdapter(
     private val handleLink: (url: String) -> Unit,
     private val saveToClipboard: (Comment) -> Unit,
     private val navigateToChannel: (Comment) -> Unit,
+    private val requestAlice: (Comment) -> Unit,
     private val navigateToReplies: ((Comment, String?) -> Unit)? = null,
 ) : PagingDataAdapter<Comment, CommentViewHolder>(
     DiffUtilItemCallback(
@@ -75,19 +76,27 @@ class CommentsPagingAdapter(
             translationStatus.isVisible = translatedMode && comment.commentText?.isNotBlank() == true &&
                 (translationMode == CommentsTranslationViewModel.Mode.ALICE ||
                     result == null || result == CommentsTranslationViewModel.Result.Failed)
+            translationStatus.setOnClickListener(null)
+            translationStatus.isClickable = false
             if (translationStatus.isVisible) {
                 translationStatus.setText(
                     when {
-                        result == CommentsTranslationViewModel.Result.Failed ->
-                            R.string.comments_translate_unavailable
                         result is CommentsTranslationViewModel.Result.Translated &&
                             translationMode == CommentsTranslationViewModel.Mode.ALICE ->
                             R.string.comments_translate_alice_attribution
+                        translationMode == CommentsTranslationViewModel.Mode.ALICE ->
+                            R.string.comments_translate_alice_select
+                        result == CommentsTranslationViewModel.Result.Failed ->
+                            R.string.comments_translate_unavailable
                         else -> R.string.comments_translate_loading
                     }
                 )
+                if (translationMode == CommentsTranslationViewModel.Mode.ALICE) {
+                    translationStatus.isClickable = true
+                    translationStatus.setOnClickListener { requestAlice(comment) }
+                }
             }
-            if (translatedMode && result == null) {
+            if (translationMode == CommentsTranslationViewModel.Mode.RU && result == null) {
                 commentTranslations.request(comment, root.context)
             }
 
