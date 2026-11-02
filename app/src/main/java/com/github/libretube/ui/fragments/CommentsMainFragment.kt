@@ -76,6 +76,7 @@ class CommentsMainFragment : Fragment(R.layout.fragment_comments) {
                 NavigationHelper.navigateChannel(view.context, comment.commentorUrl)
                 setFragmentResult(CommentsSheet.DISMISS_SHEET_REQUEST_KEY, Bundle.EMPTY)
             },
+            requestAlice = { comment -> commentsSheet?.requestAliceTranslation(comment) },
             navigateToReplies = { comment, channelAvatar ->
                 if (comment.repliesPage != null) {
                     val args = bundleOf(
