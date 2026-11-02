@@ -5,6 +5,9 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.text.InputType
+import android.widget.EditText
+import android.widget.LinearLayout
 import android.widget.Toast
 import android.view.View
 import android.view.WindowManager
@@ -143,37 +146,75 @@ class CommentsSheet : ExpandablePlayerSheet(R.layout.comments_sheet) {
     private fun showAlicePasteDialog() {
         if (commentTranslations.pendingAlice == null || !isAdded) return
         val context = requireContext()
+        val padding = (20 * resources.displayMetrics.density).toInt()
+        val input = EditText(context).apply {
+            hint = getString(R.string.comments_translate_alice_input_hint)
+            inputType = InputType.TYPE_CLASS_TEXT or
+                InputType.TYPE_TEXT_FLAG_MULTI_LINE or
+                InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            minLines = 2
+            maxLines = 7
+            isSingleLine = false
+        }
+        val container = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(padding, 0, padding, 0)
+            addView(input)
+        }
         val dialog = AlertDialog.Builder(context)
             .setTitle(R.string.comments_translate_alice_paste_title)
             .setMessage(R.string.comments_translate_alice_paste_instructions)
+            .setView(container)
             .setNegativeButton(R.string.comments_translate_alice_cancel) { _, _ ->
                 commentTranslations.clearPendingAlice()
             }
+            .setNeutralButton(R.string.comments_translate_alice_from_clipboard, null)
             .setPositiveButton(R.string.comments_translate_alice_paste, null)
             .create()
+
         dialog.setOnShowListener {
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                // The user must explicitly request this clipboard read.
-                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE)
-                    as ClipboardManager
-                val text = clipboard.primaryClip?.let { clip ->
-                    if (clip.itemCount > 0) clip.getItemAt(0)
-                        .coerceToText(context)?.toString()?.trim() else null
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
+                // Read the clipboard only on the user's explicit tap.
+                val copiedText = try {
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE)
+                        as ClipboardManager
+                    clipboard.primaryClip?.let { clip ->
+                        if (clip.itemCount > 0) {
+                            clip.getItemAt(0).coerceToText(context)?.toString()
+                        } else null
+                    }
+                } catch (_: SecurityException) {
+                    null
+                } catch (_: Exception) {
+                    null
                 }
-                val pending = commentTranslations.pendingAlice
-                if (text.isNullOrBlank() || text == pending?.source ||
-                    text.length > 5000 ||
-                    text.contains("Переведи следующий комментарий YouTube")
-                ) {
+                if (copiedText.isNullOrBlank()) {
                     Toast.makeText(
                         context,
-                        R.string.comments_translate_alice_paste_invalid,
+                        R.string.comments_translate_alice_clipboard_empty,
                         Toast.LENGTH_LONG
                     ).show()
+                } else {
+                    input.setText(copiedText.take(5001))
+                    input.setSelection(input.text.length)
+                }
+            }
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val text = input.text.toString().trim()
+                val pending = commentTranslations.pendingAlice
+                val error = when {
+                    text.isBlank() -> R.string.comments_translate_alice_input_empty
+                    text.length > 5000 -> R.string.comments_translate_alice_input_too_long
+                    text == pending?.source ||
+                        text.contains("Переведи следующий комментарий YouTube") ->
+                        R.string.comments_translate_alice_input_source
+                    else -> null
+                }
+                if (error != null) {
+                    input.error = getString(error)
                     return@setOnClickListener
                 }
-                // User confirms the text really came from Alice: never silently
-                // overwrite a comment with an unrelated clipboard entry.
+                // Confirm before replacing a comment with copied or pasted text.
                 AlertDialog.Builder(context)
                     .setTitle(R.string.comments_translate_alice_confirm_title)
                     .setMessage(text.take(650))
@@ -182,11 +223,8 @@ class CommentsSheet : ExpandablePlayerSheet(R.layout.comments_sheet) {
                         if (commentTranslations.applyCopiedAlice(text)) {
                             dialog.dismiss()
                         } else {
-                            Toast.makeText(
-                                context,
-                                R.string.comments_translate_alice_paste_invalid,
-                                Toast.LENGTH_LONG
-                            ).show()
+                            input.error =
+                                getString(R.string.comments_translate_alice_paste_invalid)
                         }
                     }
                     .show()
