@@ -7,7 +7,7 @@ import asyncio
 import hmac
 import os
 import time
-from collections import defaultdict, deque
+from collections import deque
 from threading import Lock
 
 import httpx
@@ -73,7 +73,7 @@ async def prevent_large_bodies(request: Request, call_next):
         try:
             length = int(request.headers.get("content-length", "-1"))
         except ValueError:
-            raise HTTPException(413, "Invalid content length")
+            length = -1
         if length < 0 or length > 4096:
             from fastapi.responses import JSONResponse
             return JSONResponse({"detail": "Invalid request size"}, status_code=413)
