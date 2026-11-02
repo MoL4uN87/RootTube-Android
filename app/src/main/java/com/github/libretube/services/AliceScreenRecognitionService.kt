@@ -31,25 +31,37 @@ class AliceScreenRecognitionService : AccessibilityService() {
     private var stableText: String? = null
     private var stableCount = 0
     private var lastCaptureAt = 0L
+    private var lastEventLogged: String? = null
     private var tess: TessBaseAPI? = null
     private var ocrUnavailable = false
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         connected = true
-        Log.i(TAG, "service_connected screenshot_capability_enabled")
+        Log.i(TAG, "service_connected screenshot_capability_enabled events=${serviceInfo?.eventTypes}")
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        // No tree access, text scraping or screenshots outside a user-armed job.
+        // Never inspect event contents outside one explicitly requested job.
         if (!AliceOcrBridge.isArmed()) return
-        val packageName = event?.packageName?.toString() ?: return
+        val packageName = event?.packageName?.toString() ?: "unknown"
+        val type = event?.eventType ?: 0
+        val signature = "$packageName:$type"
+        if (signature != lastEventLogged) {
+            // Diagnostic metadata only. No UI text, identifiers or screenshot data.
+            Log.i(TAG, "accessibility_event package=$packageName type=$type")
+            lastEventLogged = signature
+        }
+
         if (packageName == "com.yandex.aliceapp") {
             if (!activeWindowIsAlice) Log.i(TAG, "alice_foreground")
             activeWindowIsAlice = true
             scheduleCheck()
-        } else {
-            if (activeWindowIsAlice) Log.i(TAG, "alice_left")
+        } else if (
+            type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ||
+            type == AccessibilityEvent.TYPE_WINDOWS_CHANGED
+        ) {
+            if (activeWindowIsAlice) Log.i(TAG, "alice_left package=$packageName")
             activeWindowIsAlice = false
         }
     }
