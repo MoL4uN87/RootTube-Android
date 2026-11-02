@@ -110,7 +110,7 @@ class AliceScreenRecognitionService : AccessibilityService() {
                                 try {
                                     val engine = requireOcrEngine()
                                     engine.setImage(crop)
-                                    val pageText = engine.utF8Text.orEmpty()
+                                    val pageText = engine.getUTF8Text().orEmpty()
                                     AliceOcrParser.extract(pageText, marker)
                                 } finally {
                                     crop.recycle()
