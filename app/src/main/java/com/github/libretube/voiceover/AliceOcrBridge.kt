@@ -77,12 +77,12 @@ object AliceOcrParser {
 
     fun extract(screenText: String, marker: String): String? {
         if (!marker.matches(Regex("[0-9]{8}"))) return null
-        val normalized = screenText.replace('\\r', '\\n')
+        val normalized = screenText.replace('\r', '\n')
         // Only a stand-alone code line belongs to a completed response.
         // The user's prompt mentions the code inside an instruction sentence.
         val codeLine = Regex(
-            "(?m)^\\\\s*(?:КОД|Код|код|CODE)\\\\s*[:#-]?\\\\s*" +
-                Regex.escape(marker) + "\\\\s*[.:—-]?\\\\s*$"
+            "(?m)^\\s*(?:КОД|Код|код|CODE)\\s*[:#-]?\\s*" +
+                Regex.escape(marker) + "\\s*[.:—-]?\\s*$"
         )
         val matches = codeLine.findAll(normalized).toList()
         if (matches.size != 1) return null
@@ -98,7 +98,7 @@ object AliceOcrParser {
             .filter { it.isNotBlank() }
             .toList()
         val answer = lines.joinToString(" ")
-            .replace(Regex("\\\\s+"), " ")
+            .replace(Regex("\\s+"), " ")
             .trim()
 
         if (answer.length !in 8..2500) return null
