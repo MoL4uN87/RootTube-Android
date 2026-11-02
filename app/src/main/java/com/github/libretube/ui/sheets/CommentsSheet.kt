@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.provider.Settings
 import android.text.InputType
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -26,6 +27,8 @@ import com.github.libretube.ui.fragments.CommentsMainFragment
 import com.github.libretube.ui.models.CommonPlayerViewModel
 import com.github.libretube.ui.models.CommentsTranslationViewModel
 import com.github.libretube.api.obj.Comment
+import com.github.libretube.services.AliceScreenRecognitionService
+import com.github.libretube.voiceover.AliceOcrBridge
 
 class CommentsSheet : ExpandablePlayerSheet(R.layout.comments_sheet) {
     private var _binding: CommentsSheetBinding? = null
@@ -105,7 +108,26 @@ class CommentsSheet : ExpandablePlayerSheet(R.layout.comments_sheet) {
             showAlicePasteDialog()
             return
         }
+        if (!AliceScreenRecognitionService.connected) {
+            AlertDialog.Builder(requireContext())
+                .setTitle(R.string.alice_ocr_settings_title)
+                .setMessage(R.string.alice_ocr_settings_message)
+                .setPositiveButton(R.string.alice_ocr_settings_open) { _, _ ->
+                    startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                }
+                .setNegativeButton(R.string.alice_ocr_settings_later) { _, _ ->
+                    launchAliceTranslation(comment, enableOcr = false)
+                }
+                .show()
+            return
+        }
+        launchAliceTranslation(comment, enableOcr = true)
+    }
+
+    private fun launchAliceTranslation(comment: Comment, enableOcr: Boolean) {
         val prompt = commentTranslations.prepareAlice(comment) ?: return
+        val marker = commentTranslations.pendingAlice?.marker ?: return
+        if (enableOcr) AliceOcrBridge.arm(marker)
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
             setClassName("com.yandex.browser", "com.yandex.browser.ShareFileAliceChatActivity")
@@ -115,6 +137,7 @@ class CommentsSheet : ExpandablePlayerSheet(R.layout.comments_sheet) {
             startActivity(intent)
             awaitingAliceReturn = true
         } catch (_: ActivityNotFoundException) {
+            AliceOcrBridge.clear()
             commentTranslations.clearPendingAlice()
             Toast.makeText(
                 requireContext(),
@@ -122,6 +145,7 @@ class CommentsSheet : ExpandablePlayerSheet(R.layout.comments_sheet) {
                 Toast.LENGTH_LONG
             ).show()
         } catch (_: SecurityException) {
+            AliceOcrBridge.clear()
             commentTranslations.clearPendingAlice()
             Toast.makeText(
                 requireContext(),
@@ -135,10 +159,23 @@ class CommentsSheet : ExpandablePlayerSheet(R.layout.comments_sheet) {
         super.onResume()
         if (awaitingAliceReturn && commentTranslations.pendingAlice != null) {
             awaitingAliceReturn = false
-            // Wait until the sheet regains focus; clipboard reads are explicit
-            // and are performed only if the user taps Paste in the dialog.
             _binding?.root?.post {
-                if (isAdded && _binding != null) showAlicePasteDialog()
+                if (!isAdded || _binding == null) return@post
+                val marker = commentTranslations.pendingAlice?.marker
+                val automaticallyRead = marker?.let { AliceOcrBridge.consume(it) }
+                if (automaticallyRead != null &&
+                    commentTranslations.applyCopiedAlice(automaticallyRead)
+                ) {
+                    Toast.makeText(
+                        requireContext(),
+                        R.string.alice_ocr_success,
+                        Toast.LENGTH_SHORT
+                    ).show()
+                } else {
+                    // Backwards-compatible manual fallback if OCR could not
+                    // safely identify the response.
+                    showAlicePasteDialog()
+                }
             }
         }
     }
