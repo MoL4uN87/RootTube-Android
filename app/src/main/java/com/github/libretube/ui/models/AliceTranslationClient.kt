@@ -38,7 +38,7 @@ internal object AliceTranslationClient {
         val url = URL(normalized)
         require(url.protocol == "https" &&
             !url.host.isNullOrBlank() &&
-            url.userInfo == null &&
+            url.toURI().userInfo == null &&
             url.query == null &&
             url.ref == null
         ) { "Некорректный HTTPS-адрес" }
