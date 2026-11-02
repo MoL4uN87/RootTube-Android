@@ -8,14 +8,16 @@
     <string name="comments_translate_unavailable">Не удалось перевести</string>
     <string name="comments_translate_alice_button">AI+</string>
     <string name="comments_translate_alice_active">AI+ ✓</string>
-    <string name="comments_translate_alice_tooltip">Перевести комментарии Алисой AI (платный API)</string>
+    <string name="comments_translate_alice_tooltip">Перевод выбранного комментария через бесплатный чат Алисы</string>
     <string name="comments_translate_alice_attribution">Переведено Алисой AI</string>
-    <string name="comments_translate_alice_config_title">Настроить Алису AI+</string>
-    <string name="comments_translate_alice_config_message">Укажи адрес своего HTTPS-сервера перевода и персональный токен доступа. Ключ Yandex Cloud должен храниться только на сервере. API Алисы платный.</string>
-    <string name="comments_translate_alice_config_url">https://твой-сервер.ru/roottube-alice</string>
-    <string name="comments_translate_alice_config_token">Персональный токен доступа</string>
-    <string name="comments_translate_alice_save">Сохранить и включить AI+</string>
+    <string name="comments_translate_alice_select">Перевести Алисой AI ↗</string>
+    <string name="comments_translate_alice_hint">Нажми «Перевести Алисой AI» под нужным комментарием</string>
+    <string name="comments_translate_alice_missing_browser">Не удалось открыть Алису. Установи или обнови Яндекс Браузер</string>
+    <string name="comments_translate_alice_paste_title">Вернуть перевод из Алисы</string>
+    <string name="comments_translate_alice_paste_instructions">Отправь запрос в Алисе, нажми значок копирования под её ответом и вернись в RootTube. Затем нажми «Вставить». Текст появится только в выбранном комментарии.</string>
+    <string name="comments_translate_alice_paste">Вставить</string>
+    <string name="comments_translate_alice_paste_invalid">В буфере пока нет подходящего перевода. Скопируй именно ответ Алисы</string>
+    <string name="comments_translate_alice_confirm_title">Это перевод комментария?</string>
+    <string name="comments_translate_alice_apply">Применить перевод</string>
     <string name="comments_translate_alice_cancel">Отмена</string>
-    <string name="comments_translate_alice_config_error">Проверь HTTPS-адрес и токен доступа</string>
-    <string name="comments_translate_alice_change">Удерживай AI+, чтобы изменить настройки сервера</string>
 </resources>
