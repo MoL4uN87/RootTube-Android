@@ -178,6 +178,9 @@ dependencies {
     implementation(libs.mlkit.translate)
     implementation(libs.mlkit.language.id)
 
+    /* Opt-in, on-device Russian Cyrillic OCR for Alice screen recognition */
+    implementation("cz.adaptech.tesseract4android:tesseract4android:4.9.0")
+
     /* Room */
     ksp(libs.room.compiler)
     implementation(libs.room)
