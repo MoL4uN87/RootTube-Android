@@ -14,8 +14,14 @@
     <string name="comments_translate_alice_hint">Нажми «Перевести Алисой AI» под нужным комментарием</string>
     <string name="comments_translate_alice_missing_browser">Не удалось открыть Алису. Установи или обнови Яндекс Браузер</string>
     <string name="comments_translate_alice_paste_title">Вернуть перевод из Алисы</string>
-    <string name="comments_translate_alice_paste_instructions">Отправь запрос в Алисе, нажми значок копирования под её ответом и вернись в RootTube. Затем нажми «Вставить». Текст появится только в выбранном комментарии.</string>
-    <string name="comments_translate_alice_paste">Вставить</string>
+    <string name="comments_translate_alice_paste_instructions">Скопируй ответ Алисы и нажми «Из буфера». Если текст не появился, нажми и удерживай поле, чтобы вставить через клавиатуру, или впиши перевод вручную. Затем проверь его.</string>
+    <string name="comments_translate_alice_paste">Проверить</string>
+    <string name="comments_translate_alice_from_clipboard">Из буфера</string>
+    <string name="comments_translate_alice_input_hint">Ответ Алисы на русском</string>
+    <string name="comments_translate_alice_clipboard_empty">Буфер пуст или недоступен. Попробуй вставить текст в поле вручную</string>
+    <string name="comments_translate_alice_input_empty">Вставь перевод Алисы перед проверкой</string>
+    <string name="comments_translate_alice_input_too_long">Слишком длинный текст (максимум 5000 символов)</string>
+    <string name="comments_translate_alice_input_source">Похоже, скопирован исходный текст, а не перевод Алисы</string>
     <string name="comments_translate_alice_paste_invalid">В буфере пока нет подходящего перевода. Скопируй именно ответ Алисы</string>
     <string name="comments_translate_alice_confirm_title">Это перевод комментария?</string>
     <string name="comments_translate_alice_apply">Применить перевод</string>
