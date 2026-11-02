@@ -6,19 +6,19 @@ does not return an Android Activity result. The previous manual clipboard
 workflow remains available.
 
 This feature adds an **optional** Accessibility Service that may obtain
-the translation from a screenshot of the **separately installed Alice app**
-(`com.yandex.aliceapp`). On Android, the user must explicitly enable
+the translation from a screenshot of the **official Yandex Browser Alice chat**
+(`com.yandex.browser`) or the separate Alice app (`com.yandex.aliceapp`). On Android, the user must explicitly enable
 `RootTube: перевод Алисы с экрана` in Accessibility settings.
 
 ## Privacy and scope
 
 - Capture is armed **only** by an explicit tap on the Alice translate action.
-- Active for at most 75 seconds and while `com.yandex.aliceapp` is foreground.
+- Active for at most 75 seconds and only while Yandex Browser or the dedicated Alice app is foreground. A screenshot may include other visible parts of those screens, but no image is stored.
 - Screenshots and OCR text are processed on-device and are not stored.
 - No Accessibility window-tree contents or personal chats are requested.
 - A random 8-digit marker is included in the user-selected request. The OCR
-  parser requires two occurrences of that specific marker and Russian text
-  after the second one. The answer must stabilize across two screenshots.
+  parser requires a standalone reply marker and Russian text below it;
+  the original prompt may no longer be visible. The answer must stabilize across two screenshots.
 - Only the matching selected comment is updated. Original YouTube comment
   text is not overwritten in the source data.
 - When OCR fails, the original manual copy/paste flow is used.
