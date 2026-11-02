@@ -1,6 +1,5 @@
 package com.github.libretube.ui.models
 
-import android.content.Context
 import androidx.core.text.parseAsHtml
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
@@ -29,16 +28,14 @@ import kotlin.coroutines.resumeWithException
  * Language models are downloaded on first use, then translation runs on-device.
  */
 class CommentsTranslationViewModel : ViewModel() {
-    enum class Mode { ORIGINAL, RU, ALICE }
-
     sealed interface Result {
         data class Translated(val text: String) : Result
         data object Unchanged : Result
         data object Failed : Result
     }
 
-    private val _mode = MutableLiveData(Mode.ORIGINAL)
-    val mode: LiveData<Mode> = _mode
+    private val _enabled = MutableLiveData(false)
+    val enabled: LiveData<Boolean> = _enabled
 
     private val _updatedCommentId = MutableLiveData<String>()
     val updatedCommentId: LiveData<String> = _updatedCommentId
@@ -50,40 +47,29 @@ class CommentsTranslationViewModel : ViewModel() {
     private val cache = LinkedHashMap<String, Result>()
     private val inProgress = mutableSetOf<String>()
 
-    fun toggle() = setMode(if (_mode.value == Mode.RU) Mode.ORIGINAL else Mode.RU)
-
-    fun toggleAlice() = setMode(
-        if (_mode.value == Mode.ALICE) Mode.ORIGINAL else Mode.ALICE
-    )
-
-    private fun setMode(value: Mode) {
-        if (_mode.value == value) return
-        // A temporary failure can be retried when the user re-enables the mode.
-        cache.entries.removeAll { it.value == Result.Failed }
-        _mode.value = value
+    fun toggle() {
+        val next = _enabled.value != true
+        if (next) {
+            // Allow a fresh attempt if a model download failed on the last try.
+            cache.entries.removeAll { it.value == Result.Failed }
+        }
+        _enabled.value = next
     }
 
-    private fun key(comment: Comment, provider: Mode): String =
-        "${provider.name}:${comment.commentId}:${comment.commentText.orEmpty()}"
+    private fun key(comment: Comment): String =
+        "${comment.commentId}:${comment.commentText.orEmpty()}"
 
-    fun resultFor(comment: Comment): Result? = cache[key(comment, _mode.value ?: Mode.ORIGINAL)]
+    fun resultFor(comment: Comment): Result? = cache[key(comment)]
 
-    fun request(comment: Comment, context: Context) {
-        val selectedMode = _mode.value ?: Mode.ORIGINAL
-        if (selectedMode == Mode.ORIGINAL || comment.commentText.isNullOrBlank()) return
-        val cacheKey = key(comment, selectedMode)
+    fun request(comment: Comment) {
+        if (_enabled.value != true || comment.commentText.isNullOrBlank()) return
+        val cacheKey = key(comment)
         if (cache.containsKey(cacheKey) || !inProgress.add(cacheKey)) return
 
         viewModelScope.launch {
             try {
                 val result = semaphore.withPermit {
-                    val source = comment.commentText.orEmpty().parseAsHtml().toString()
-                    if (selectedMode == Mode.ALICE) {
-                        val translated = AliceTranslationClient.translate(context.applicationContext, source)
-                        Result.Translated(translated)
-                    } else {
-                        translateLocal(source)
-                    }
+                    translate(comment.commentText.orEmpty().parseAsHtml().toString())
                 }
                 cache[cacheKey] = result
             } catch (cancelled: CancellationException) {
@@ -100,7 +86,7 @@ class CommentsTranslationViewModel : ViewModel() {
         }
     }
 
-    private suspend fun translateLocal(text: String): Result {
+    private suspend fun translate(text: String): Result {
         val clean = text.trim()
         if (clean.isBlank() || clean.none { it.isLetter() }) return Result.Unchanged
 
