@@ -86,4 +86,12 @@ class AliceLatinCodecTest {
             names!!, emoji.emojis
         ))
     }
+    @Test
+    fun restoresWhenBilingualOcrReadsCyrillicLAsLatinJI() {
+        assertEquals(
+            "Организация TPUSA.",
+            AliceLatinCodec.restore("Организация CJIOBO1.", listOf("TPUSA"))
+        )
+    }
+
 }
