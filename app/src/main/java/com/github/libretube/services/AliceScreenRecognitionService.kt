@@ -262,26 +262,31 @@ class AliceScreenRecognitionService : AccessibilityService() {
         tess?.let { return it }
         val root = File(filesDir, "alice-ocr")
         val dataDir = File(root, "tessdata")
-        val languageData = File(dataDir, "rus.traineddata")
-        if (!languageData.exists() || languageData.length() < 1_000_000) {
-            dataDir.mkdirs()
-            assets.open("tessdata/rus.traineddata").use { source ->
-                val partial = File(dataDir, "rus.traineddata.partial")
-                partial.outputStream().use { dest -> source.copyTo(dest) }
-                if (partial.length() < 1_000_000) {
-                    partial.delete()
-                    error("Cyrillic OCR model is missing")
-                }
-                if (!partial.renameTo(languageData)) {
-                    partial.delete()
-                    error("Unable to install local OCR model")
+        // Russian and English traineddata come from the project's assets.
+        // Both are copied to app-private storage; no runtime network request.
+        for (lang in listOf("rus", "eng")) {
+            val languageData = File(dataDir, "$lang.traineddata")
+            if (!languageData.exists() || languageData.length() < 1_000_000) {
+                dataDir.mkdirs()
+                assets.open("tessdata/$lang.traineddata").use { source ->
+                    val partial = File(dataDir, "$lang.traineddata.partial")
+                    partial.outputStream().use { dest -> source.copyTo(dest) }
+                    if (partial.length() < 1_000_000) {
+                        partial.delete()
+                        error("OCR model $lang is missing or too small")
+                    }
+                    if (languageData.exists()) languageData.delete()
+                    if (!partial.renameTo(languageData)) {
+                        partial.delete()
+                        error("Unable to install OCR model $lang")
+                    }
                 }
             }
         }
         val engine = TessBaseAPI()
-        if (!engine.init(root.absolutePath, "rus")) {
+        if (!engine.init(root.absolutePath, "rus+eng")) {
             engine.recycle()
-            error("Unable to initialize Russian OCR")
+            error("Unable to initialize Russian/English OCR")
         }
         tess = engine
         return engine
