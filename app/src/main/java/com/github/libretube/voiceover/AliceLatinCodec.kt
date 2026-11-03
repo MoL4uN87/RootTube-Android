@@ -11,7 +11,7 @@ object AliceLatinCodec {
 
     private val word = Regex("""(?<![A-Za-z0-9])([A-Za-z][A-Za-z0-9]*)(?![A-Za-z0-9])""")
     private val marker = Regex(
-        """(?iu)(?<![\p{L}\p{N}])(?:СЛОВО|СЛОВ0|CЛOBO|CЛОВO|СЛOВO)\s*[:#_-]?\s*(\d{1,2})(?![\p{L}\p{N}])"""
+        """(?iu)(?<![\p{L}\p{N}])[СC][ЛJI]{1,2}[ОO0][ВB8][ОO0]\s*[:#_-]?\s*(\d{1,2})(?![\p{L}\p{N}])"""
     )
 
     fun encode(text: String): Encoded {
