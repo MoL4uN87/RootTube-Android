@@ -9,6 +9,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.github.libretube.api.obj.Comment
 import com.github.libretube.voiceover.AliceEmojiCodec
+import com.github.libretube.voiceover.AliceLatinCodec
 import com.google.mlkit.nl.languageid.LanguageIdentification
 import com.google.mlkit.nl.translate.TranslateLanguage
 import com.google.mlkit.nl.translate.Translation
@@ -58,7 +59,8 @@ class CommentsTranslationViewModel : ViewModel() {
         val source: String,
         val cacheKey: String,
         val marker: String,
-        val emojis: List<String>
+        val emojis: List<String>,
+        val latinTerms: List<String>
     )
 
     var pendingAlice: PendingAlice? = null
@@ -72,13 +74,15 @@ class CommentsTranslationViewModel : ViewModel() {
         val source = comment.commentText.orEmpty().parseAsHtml().toString().trim()
         if (source.isBlank()) return null
         val marker = (10_000_000 + SecureRandom().nextInt(90_000_000)).toString()
-        val encoded = AliceEmojiCodec.encode(source.take(1700))
+        val emojiEncoded = AliceEmojiCodec.encode(source.take(1700))
+        val latinEncoded = AliceLatinCodec.encode(emojiEncoded.text)
         pendingAlice = PendingAlice(
             comment.commentId,
             source,
             key(comment, Mode.ALICE),
             marker,
-            encoded.emojis
+            emojiEncoded.emojis,
+            latinEncoded.terms
         )
         return "НОМЕР ЗАДАНИЯ: $marker\n" +
             "Переведи следующий комментарий YouTube на естественный русский язык. " +
@@ -88,11 +92,14 @@ class CommentsTranslationViewModel : ViewModel() {
             "Метки СМАЙЛ1, СМАЙЛ2 и так далее обозначают исходные эмодзи. " +
             "Сохрани каждую такую метку в переводе точно без изменений и без кавычек. " +
             "Не рисуй эмодзи сам: RootTube восстановит их из исходного текста.\n" +
+            "Метки СЛОВО1, СЛОВО2 и так далее заменяют английские сокращения и названия. " +
+            "Сохрани их в точности, не переводи и не изменяй: RootTube восстановит " +
+            "исходные латинские названия.\n" +
             "Заверши ответ отдельной строкой ТОЧНО: КОНЕЦ $marker. " +
             "Ничего не пиши после строки КОНЕЦ. Не добавляй ссылки, источники, " +
             "пояснения или оценки.\n\n" +
             "КОММЕНТАРИЙ:\n" +
-            encoded.text.take(2100)
+            latinEncoded.text
     }
 
     fun clearPendingAlice() {
@@ -106,8 +113,10 @@ class CommentsTranslationViewModel : ViewModel() {
         if (cleaned.isBlank() || cleaned.length > 5000 ||
             cleaned == pending.source || cleaned.contains("Переведи следующий комментарий YouTube")
         ) return false
+        val restoredNames = AliceLatinCodec.restore(cleaned, pending.latinTerms)
+            ?: return false
         cache[pending.cacheKey] = Result.Translated(
-            AliceEmojiCodec.restore(cleaned, pending.emojis)
+            AliceEmojiCodec.restore(restoredNames, pending.emojis)
         )
         pendingAlice = null
         while (cache.size > 300) cache.remove(cache.keys.first())
