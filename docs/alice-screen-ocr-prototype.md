@@ -24,7 +24,13 @@ the translation from a screenshot of the **official Yandex Browser Alice chat**
 - Before hand-off, the emoji in the source comment are replaced with visible
   `СМАЙЛ1`, `СМАЙЛ2`, ... markers. The exact original Unicode emoji (including
   skin tones, flags and joined sequences) are reinserted in RootTube after
-  recognition, because Cyrillic Tesseract cannot recognize emoji glyphs.
+  recognition, because Tesseract cannot recognize emoji glyphs.
+- Original all-caps Latin abbreviations and mixed-case product names such as
+  `TPUSA`, `NASA`, `YouTube` and `iPhone` are replaced with `СЛОВО1`,
+  `СЛОВО2`, ... markers before sending to Alice, then restored exactly.
+  Ordinary English words are left unchanged for translation. If the OCR
+  response loses the marker and the exact Latin spelling, RootTube declines
+  to auto-apply the potentially corrupted translation.
 - After recognition, the service attempts at most three Android Back actions
   only while the Yandex app remains foreground. The attempt stops immediately
   when RootTube resumes or the user enters another app.
@@ -36,12 +42,12 @@ the translation from a screenshot of the **official Yandex Browser Alice chat**
 
 Run `tools/prepare-alice-ocr.ps1` in PowerShell on Windows. It downloads
 `rus.traineddata` from the Tesseract project's `tessdata_fast` repository,
-puts it into `app/src/main/assets/tessdata/` and prints SHA256. The model
-asset is excluded from Git. Check that the downloaded file is ~3.7 MB and
-comes from the official `tesseract-ocr/tessdata_fast` repository.
+puts both `rus.traineddata` and `eng.traineddata` into `app/src/main/assets/tessdata/` and prints SHA256. The model
+asset is excluded from Git. Check that the downloaded files come from the official
+`tesseract-ocr/tessdata_fast` repository.
 
 Build `:app:testDebugUnitTest :app:assembleDebug`. On first use the app
-copies the bundled model into app-private storage for Tesseract.
+copies the bundled models into app-private storage and initializes Tesseract with `rus+eng` to preserve mixed Cyrillic/Latin text.
 
 ## Current interaction
 
