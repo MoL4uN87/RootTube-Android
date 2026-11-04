@@ -38,6 +38,36 @@ internal class VideoBriefClient {
         tracks: List<Subtitle>,
         durationSeconds: Long
     ): Brief = withContext(Dispatchers.IO) {
+        // Prefer YouTube's own already-generated AI summary, when present.
+        // This source is independent of subtitle availability, and ML Kit
+        // translates it on-device before it is displayed to the user.
+        currentCoroutineContext().ensureActive()
+        val youtubeSummary = try {
+            YouTubeAiSummaryClient().getRussianSummary(videoId)
+        } catch (cancel: CancellationException) {
+            throw cancel
+        } catch (_: Exception) {
+            null
+        }
+        if (youtubeSummary != null) {
+            val label = if (youtubeSummary.wasTranslated) {
+                "Русский (переведено на устройстве)"
+            } else {
+                "Русский"
+            }
+            return@withContext Brief(
+                "Краткий пересказ от ИИ YouTube:\n\n" +
+                    youtubeSummary.russianText +
+                    "\n\nИсточник: готовый пересказ YouTube. Язык: $label.\n" +
+                    "ИИ может ошибаться. Перепроверяйте важные утверждения.",
+                "YouTube: готовый ИИ-пересказ",
+                label
+            )
+        }
+
+        // YouTube does not publish an AI recap for every video, or it may
+        // not be available without authentication. Keep the existing
+        // subtitle-based key-moments fallback rather than inventing content.
         var captions: List<Cue> = emptyList()
         var source = ""
         var isRussian = false
