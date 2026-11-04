@@ -13,7 +13,7 @@ import kotlinx.serialization.json.jsonPrimitive
  * "AI can make mistakes" banner with the actual summary paragraphs.
  */
 internal object YouTubeAiSummaryParser {
-    private val rendererKey = Regex(""""expandableMetadataRenderer"\s*:"""")
+    private val rendererKey = Regex("\"expandableMetadataRenderer\"\\s*:")
     private const val MAX_RENDERER_CHARS = 320_000
 
     fun extractFromWatchHtml(html: String): String? {
