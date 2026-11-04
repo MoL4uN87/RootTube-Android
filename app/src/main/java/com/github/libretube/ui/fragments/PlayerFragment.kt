@@ -759,14 +759,17 @@ class PlayerFragment : Fragment(R.layout.fragment_player), CustomPlayerCallback 
                 requestVideoBrief()
             } else {
                 MaterialAlertDialogBuilder(requireContext())
-                    .setTitle("Пересказ по субтитрам")
+                    .setTitle("Пересказ видео на русском")
                     .setMessage(
-                        "RootTube скачает субтитры ролика с текущего сервера " +
-                            "или через VOT. Если русских субтитров нет, отдельные " +
-                            "фрагменты текста могут быть отправлены в Google Translate " +
-                            "для перевода на русский. Данные аккаунта и аудио не передаются. " +
-                            "Это автоматическая подборка ключевых моментов, а не " +
-                            "генеративный AI-пересказ; внешние сервисы могут быть недоступны."
+                        "RootTube попробует получить готовый ИИ-пересказ из " +
+                            "публичной страницы YouTube и перевести его на русский " +
+                            "прямо на телефоне через Google ML Kit. Для первого перевода " +
+                            "может потребоваться загрузка языковой модели. " +
+                            "Если готового пересказа нет, приложение соберёт " +
+                            "ключевые моменты по субтитрам (при необходимости через VOT); " +
+                            "фрагменты на другом языке могут отправляться в Google Translate. " +
+                            "Аудио и данные аккаунта не передаются. " +
+                            "Пересказ может содержать ошибки."
                     )
                     .setNegativeButton("Отмена", null)
                     .setPositiveButton("Продолжить") { _, _ ->
@@ -893,7 +896,13 @@ class PlayerFragment : Fragment(R.layout.fragment_player), CustomPlayerCallback 
                 if (_binding == null || videoId != currentId) return@launch
 
                 MaterialAlertDialogBuilder(requireContext())
-                    .setTitle("Кратко по субтитрам")
+                    .setTitle(
+                        if (result.source == "YouTube: готовый ИИ-пересказ") {
+                            "Краткий пересказ от ИИ · Русский"
+                        } else {
+                            "Ключевые моменты · Русский"
+                        }
+                    )
                     .setMessage(result.text)
                     .setNeutralButton("Копировать") { _, _ ->
                         val clipboard = requireContext().getSystemService(
