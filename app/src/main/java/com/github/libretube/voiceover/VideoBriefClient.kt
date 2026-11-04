@@ -151,7 +151,13 @@ internal class VideoBriefClient {
         for ((position, cue) in points.withIndex()) {
             currentCoroutineContext().ensureActive()
             val translation = if (isRussian) cue.text else translateIntoRussian(cue.text)
-            if (!isRussian && translation != null) translatedCount++
+            if (!isRussian && translation.isNullOrBlank()) {
+                throw IllegalStateException(
+                    "YouTube не отдал готовый ИИ-пересказ, а перевод " +
+                        "субтитров на русский сейчас недоступен."
+                )
+            }
+            if (!isRussian) translatedCount++
             val displayed = translation ?: cue.text
             momentLines += "${position + 1}. ${formatTimestamp(cue.ms)} — ${displayed.trim()}"
         }
