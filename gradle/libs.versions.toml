@@ -1,5 +1,6 @@
 [versions]
 appcompat = "1.7.1"
+browser = "1.10.0"
 core = "1.18.0"
 documentfile = "1.1.0"
 gradle = "9.2.1"
@@ -42,6 +43,7 @@ protobufPlugin = "0.9.6"
 [libraries]
 androidx-activity = { group = "androidx.activity", name = "activity-ktx", version.ref = "activity" }
 androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
+androidx-browser = { group = "androidx.browser", name = "browser", version.ref = "browser" }
 androidx-core = { group = "androidx.core", name = "core", version.ref = "core" }
 androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "splashscreen" }
 androidx-constraintlayout = { group = "androidx.constraintlayout", name = "constraintlayout", version.ref = "constraintlayout" }

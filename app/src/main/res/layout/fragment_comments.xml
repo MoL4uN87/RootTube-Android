@@ -30,4 +30,30 @@
         android:textStyle="bold"
         android:visibility="gone" />
 
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="12dp"
+        android:layout_marginVertical="6dp"
+        android:orientation="horizontal">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnRefreshComments"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="6dp"
+            android:minHeight="48dp"
+            android:text="@string/comments_refresh_after_youtube" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnWriteYouTubeComment"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:minHeight="48dp"
+            android:text="@string/comments_write_on_youtube" />
+    </LinearLayout>
+
 </LinearLayout>

@@ -77,6 +77,12 @@ class CommentsMainFragment : Fragment(R.layout.fragment_comments) {
                 setFragmentResult(CommentsSheet.DISMISS_SHEET_REQUEST_KEY, Bundle.EMPTY)
             },
             requestAlice = { comment -> commentsSheet?.requestAliceTranslation(comment) },
+            openYouTubeActions = { comment ->
+                commentsSheet?.openYouTubeCommentActions(viewModel.videoIdLiveData.value, comment.commentId)
+            },
+            replyOnYouTube = { comment ->
+                commentsSheet?.openYouTubeCommentActions(viewModel.videoIdLiveData.value, comment.commentId)
+            },
             navigateToReplies = { comment, channelAvatar ->
                 if (comment.repliesPage != null) {
                     val args = bundleOf(
@@ -94,6 +100,15 @@ class CommentsMainFragment : Fragment(R.layout.fragment_comments) {
         )
         binding.commentsRV.adapter = commentPagingAdapter
 
+        binding.btnWriteYouTubeComment.setOnClickListener {
+            commentsSheet?.openYouTubeCommentActions(viewModel.videoIdLiveData.value)
+        }
+        binding.btnRefreshComments.setOnClickListener {
+            layoutManager.scrollToPosition(POSITION_START)
+            viewModel.setCommentsPosition(POSITION_START)
+            commentPagingAdapter.refresh()
+        }
+
         commentTranslations.mode.observe(viewLifecycleOwner) {
             commentPagingAdapter.notifyDataSetChanged()
         }
@@ -105,10 +120,13 @@ class CommentsMainFragment : Fragment(R.layout.fragment_comments) {
 
         commentPagingAdapter.addLoadStateListener { loadStates ->
             binding.progress.isVisible = loadStates.refresh is LoadState.Loading
-
-            if (loadStates.append is LoadState.NotLoading && loadStates.append.endOfPaginationReached && commentPagingAdapter.itemCount == 0) {
+            val isEmpty = loadStates.refresh is LoadState.NotLoading &&
+                loadStates.append is LoadState.NotLoading &&
+                loadStates.append.endOfPaginationReached &&
+                commentPagingAdapter.itemCount == 0
+            binding.errorTV.isVisible = isEmpty
+            if (isEmpty) {
                 binding.errorTV.text = getString(R.string.no_comments_available)
-                binding.errorTV.isVisible = true
             }
         }
 

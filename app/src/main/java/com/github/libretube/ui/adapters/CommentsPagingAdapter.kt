@@ -31,11 +31,13 @@ class CommentsPagingAdapter(
     private val saveToClipboard: (Comment) -> Unit,
     private val navigateToChannel: (Comment) -> Unit,
     private val requestAlice: (Comment) -> Unit,
+    private val openYouTubeActions: (Comment) -> Unit,
+    private val replyOnYouTube: (Comment) -> Unit,
     private val navigateToReplies: ((Comment, String?) -> Unit)? = null,
 ) : PagingDataAdapter<Comment, CommentViewHolder>(
     DiffUtilItemCallback(
         areItemsTheSame = { oldItem, newItem -> oldItem.commentId == newItem.commentId },
-        areContentsTheSame = { _, _ -> true },
+        areContentsTheSame = { oldItem, newItem -> oldItem == newItem },
     )
 ) {
 
@@ -102,6 +104,9 @@ class CommentsPagingAdapter(
 
             ImageHelper.loadImage(comment.thumbnail, commentorImage, true)
             likesTextView.text = comment.likeCount.formatShort()
+            likesTextView.contentDescription = root.context.getString(R.string.comments_like_on_youtube)
+            likesTextView.setOnClickListener { openYouTubeActions(comment) }
+            replyOnYoutube.setOnClickListener { replyOnYouTube(comment) }
 
             if (comment.creatorReplied && !channelAvatar.isNullOrBlank()) {
                 ImageHelper.loadImage(channelAvatar, creatorReplyImageView, true)

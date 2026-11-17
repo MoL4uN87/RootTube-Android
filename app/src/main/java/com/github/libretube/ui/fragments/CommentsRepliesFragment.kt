@@ -61,7 +61,17 @@ class CommentsRepliesFragment : Fragment(R.layout.fragment_comments) {
                 NavigationHelper.navigateChannel(view.context, comment.commentorUrl)
                 setFragmentResult(CommentsSheet.DISMISS_SHEET_REQUEST_KEY, Bundle.EMPTY)
             },
-            requestAlice = { comment -> commentsSheet?.requestAliceTranslation(comment) }
+            requestAlice = { comment -> commentsSheet?.requestAliceTranslation(comment) },
+            openYouTubeActions = { comment ->
+                commentsSheet?.openYouTubeCommentActions(
+                    requireArguments().getString(IntentData.videoId), comment.commentId
+                )
+            },
+            replyOnYouTube = { comment ->
+                commentsSheet?.openYouTubeCommentActions(
+                    requireArguments().getString(IntentData.videoId), comment.commentId
+                )
+            }
         )
         commentsSheet?.updateFragmentInfo(
             true,
@@ -74,6 +84,16 @@ class CommentsRepliesFragment : Fragment(R.layout.fragment_comments) {
         binding.commentsRV.layoutManager = layoutManager
 
         binding.commentsRV.adapter = repliesAdapter
+
+        // The parent comment is an immutable navigation snapshot. Refresh from the main list.
+        binding.btnRefreshComments.isGone = true
+        binding.btnWriteYouTubeComment.setText(R.string.comments_reply_on_youtube)
+        binding.btnWriteYouTubeComment.setOnClickListener {
+            commentsSheet?.openYouTubeCommentActions(
+                requireArguments().getString(IntentData.videoId),
+                requireArguments().parcelable<Comment>(IntentData.comment)?.commentId
+            )
+        }
 
         commentTranslations.mode.observe(viewLifecycleOwner) {
             repliesAdapter.notifyDataSetChanged()

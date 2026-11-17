@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="comments_like_on_youtube">Открыть комментарий на YouTube, чтобы поставить или снять лайк</string>
+    <string name="comments_reply_on_youtube">Ответить</string>
+    <string name="comments_write_on_youtube">Написать комментарий на YouTube</string>
+    <string name="comments_refresh_after_youtube">Обновить</string>
+    <string name="comments_refresh_hint">Если ты поставил лайк или написал комментарий, нажми «Обновить», чтобы увидеть изменения</string>
+    <string name="comments_open_on_youtube_failed">Не удалось открыть YouTube. Проверь браузер и ссылку на видео</string>
     <string name="comments_translate_ru">RU</string>
     <string name="comments_translate_original">ОРИГ</string>
     <string name="comments_translate_tooltip">Перевести комментарии на русский</string>

@@ -4,7 +4,7 @@
 
 **Goal:** Let RootTube users like/unlike, post comments, and reply via official YouTube pages shown in a browser-backed in-app bottom sheet.
 
-**Architecture:** Keep existing read-only Piped/native comment and translation UI. Route user-initiated actions through a validated YouTube URL builder into Android partial Custom Tabs; on return refresh native comment paging. All writes occur on YouTube web UI, never through unofficial authenticated endpoints.
+**Architecture:** Keep existing read-only Piped/native comment and translation UI. Route user-initiated actions through a validated YouTube URL builder into Android partial Custom Tabs; offer explicit main-list refresh while preserving existing scroll position on return. All writes occur on YouTube web UI, never through unofficial authenticated endpoints.
 
 **Tech Stack:** Kotlin, Android Fragments, AndroidX Browser 1.10.0, existing AndroidX Paging, JUnit 4, XML layouts.
 
@@ -22,7 +22,7 @@
 2. Comment ID with punctuation or URL separators: URL-encoded and cannot inject query parameters; test checks.
 3. Empty/oversized comment ID: no comment-specific jump; test rejects.
 4. Browser unavailable or security rejection: no crash; launcher returns failure and UI displays error.
-5. Returning from browser after action: no stale local like state displayed as confirmed; native list refreshes.
+5. Returning from browser after action: no stale local like state displayed as confirmed; explicit refresh shows changes and does not silently reset a deep-scroll position.
 
 ---
 
@@ -51,11 +51,11 @@
 
 **Interfaces:**
 - Consumes `YouTubeCommentWebLinks` results.
-- Produces `object YouTubeCommentPanel` with `fun open(context: Context, url: String): Boolean`; `true` means launch intent successfully dispatched, not that interaction succeeded.
+- Produces `object YouTubeCommentPanel` with `fun createIntent(context: Context, url: String): Intent?`; `null` means an unsupported or unsafe URL or no browser with Custom Tabs.
 
 - [ ] Step 1: Write/verify dependency-specific contract review: caller supplies URL builder output, launcher catches ActivityNotFoundException/SecurityException.
 - [ ] Step 2: Add `androidx.browser:browser:1.10.0` version-catalog entry and app dependency.
-- [ ] Step 3: Implement CustomTabsIntent with ~80% screen initial height, system/default browser cookies, no ephemeral mode or browser credentials access, safe errors.
+- [ ] Step 3: Implement CustomTabsIntent with ~80% screen initial height, system/default browser cookies, no ephemeral mode or browser credentials access, safe errors. Launch via `ActivityResultContracts.StartActivityForResult`, which Chrome requires for a partial Custom Tab without binding a browser session.
 - [ ] Step 4: Build `./gradlew :app:assembleDebug --console=plain`; expect compile success.
 - [ ] Step 5: Commit browser launcher + dependency.
 
@@ -72,13 +72,13 @@
 
 **Interfaces:**
 - Adapter adds `openYouTubeActions: (Comment) -> Unit` and `replyOnYouTube: (Comment) -> Unit`, no side effects except callbacks.
-- Sheet adds `openYouTubeCommentActions(videoId: String?, commentId: String? = null)`; emits child fragment result after resuming from panel, to trigger paging adapter `refresh()`.
-- Each fragment wires both callbacks and bottom composer. Main composer opens video; replies composer opens current parent comment.
+- Sheet adds `openYouTubeCommentActions(videoId: String?, commentId: String? = null)`; launches browser intent with Activity Result API and shows a return hint. It does not automatically refresh because deep-page pagination cannot preserve position.
+- Each fragment wires both callbacks and bottom composer. Main composer opens video and provides an explicit «Обновить» action, which scrolls to the first page before paging refresh; replies composer opens the current parent comment and hides refresh because its parent row is a navigation snapshot.
 
 - [ ] Step 1: Add localized accessible button descriptions for like/response/new comment and browser error.
 - [ ] Step 2: Add clickable like and explicit reply buttons to comment row and a fixed composer button in the existing comments layout.
 - [ ] Step 3: Wire callbacks through both fragments to the sheet URL launcher; ensure normal reply navigation still works and translation UI persists.
-- [ ] Step 4: Add refresh-after-return signal to both adapters and proper failure toast.
+- [ ] Step 4: Add explicit main-list refresh action, hide the stale empty message when comments appear, and show a return hint and a proper failure toast.
 - [ ] Step 5: Run `./gradlew :app:testDebugUnitTest :app:assembleDebug --console=plain`, verify output.
 - [ ] Step 6: Commit UI and wiring.
 

@@ -115,12 +115,17 @@
                 <com.github.libretube.ui.views.DrawableTextView
                     android:id="@+id/likes_textView"
                     android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
+                    android:layout_height="48dp"
                     android:layout_marginEnd="5dp"
+                    android:background="@drawable/rounded_ripple"
+                    android:clickable="true"
                     android:drawablePadding="6dp"
+                    android:focusable="true"
                     android:gravity="center_vertical"
                     android:includeFontPadding="false"
+                    android:paddingHorizontal="6dp"
                     android:textStyle="bold"
+                    android:tooltipText="@string/comments_like_on_youtube"
                     app:drawableStartCompat="@drawable/ic_thumb_up"
                     app:drawableStartDimen="16dp"
                     tools:text="1.2k" />
@@ -156,6 +161,20 @@
                     app:drawableStartDimen="16dp"
                     tools:text="53"
                     tools:visibility="visible" />
+
+                <TextView
+                    android:id="@+id/reply_on_youtube"
+                    android:layout_width="wrap_content"
+                    android:layout_height="48dp"
+                    android:layout_marginStart="12dp"
+                    android:background="@drawable/rounded_ripple"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center_vertical"
+                    android:paddingHorizontal="6dp"
+                    android:text="@string/comments_reply_on_youtube"
+                    android:textColor="?attr/colorPrimary"
+                    android:textSize="12sp" />
 
             </LinearLayout>
 

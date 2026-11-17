@@ -13,6 +13,7 @@ import android.widget.LinearLayout
 import android.widget.Toast
 import android.view.View
 import android.view.WindowManager
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.activity.ComponentDialog
 import androidx.activity.addCallback
@@ -28,6 +29,8 @@ import com.github.libretube.ui.fragments.CommentsMainFragment
 import com.github.libretube.ui.models.CommonPlayerViewModel
 import com.github.libretube.ui.models.CommentsTranslationViewModel
 import com.github.libretube.api.obj.Comment
+import com.github.libretube.ui.comments.YouTubeCommentPanel
+import com.github.libretube.ui.comments.YouTubeCommentWebLinks
 import com.github.libretube.services.AliceScreenRecognitionService
 import com.github.libretube.voiceover.AliceOcrBridge
 
@@ -39,11 +42,42 @@ class CommentsSheet : ExpandablePlayerSheet(R.layout.comments_sheet) {
     private val commentTranslations: CommentsTranslationViewModel by viewModels()
     private var awaitingAliceReturn = false
 
+    private val youtubePanelLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        if (isAdded) {
+            // Refresh is explicit: paging has no reliable anchor key for deep pages.
+            Toast.makeText(requireContext(), R.string.comments_refresh_hint, Toast.LENGTH_LONG).show()
+        }
+    }
+
     private val backPressedCallback by lazy(LazyThreadSafetyMode.NONE) {
         (dialog as ComponentDialog?)?.onBackPressedDispatcher?.addCallback(owner = viewLifecycleOwner, enabled = false) {
             if (childFragmentManager.backStackEntryCount > 0) {
                 childFragmentManager.popBackStack()
             }
+        }
+    }
+
+    /** Leave the actual like/comment submission to YouTube's authenticated web UI. */
+    fun openYouTubeCommentActions(videoId: String?, commentId: String? = null) {
+        val url = videoId?.let { id ->
+            if (commentId == null) YouTubeCommentWebLinks.video(id)
+            else YouTubeCommentWebLinks.comment(id, commentId)
+        }
+        val browserIntent = url?.let { YouTubeCommentPanel.createIntent(requireContext(), it) }
+        if (browserIntent == null) {
+            Toast.makeText(
+                requireContext(), R.string.comments_open_on_youtube_failed, Toast.LENGTH_LONG
+            ).show()
+            return
+        }
+        try {
+            youtubePanelLauncher.launch(browserIntent)
+        } catch (_: ActivityNotFoundException) {
+            Toast.makeText(requireContext(), R.string.comments_open_on_youtube_failed, Toast.LENGTH_LONG).show()
+        } catch (_: SecurityException) {
+            Toast.makeText(requireContext(), R.string.comments_open_on_youtube_failed, Toast.LENGTH_LONG).show()
         }
     }
 
