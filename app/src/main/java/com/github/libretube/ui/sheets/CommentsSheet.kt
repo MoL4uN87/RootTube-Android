@@ -2,6 +2,7 @@ package com.github.libretube.ui.sheets
 
 import android.content.ActivityNotFoundException
 import android.content.ClipboardManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
@@ -17,6 +18,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.activity.ComponentDialog
 import androidx.activity.addCallback
+import androidx.browser.customtabs.CustomTabsClient
+import androidx.browser.customtabs.CustomTabsServiceConnection
 import androidx.core.view.isVisible
 import androidx.fragment.app.activityViewModels
 import androidx.fragment.app.viewModels
@@ -41,10 +44,13 @@ class CommentsSheet : ExpandablePlayerSheet(R.layout.comments_sheet) {
     private val commonPlayerViewModel: CommonPlayerViewModel by activityViewModels()
     private val commentTranslations: CommentsTranslationViewModel by viewModels()
     private var awaitingAliceReturn = false
+    private var youtubeBrowserConnection: CustomTabsServiceConnection? = null
+    private var youtubeBrowserContext: Context? = null
 
     private val youtubePanelLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) {
+        releaseYouTubeBrowserConnection()
         if (isAdded) {
             // Refresh is explicit: paging has no reliable anchor key for deep pages.
             Toast.makeText(requireContext(), R.string.comments_refresh_hint, Toast.LENGTH_LONG).show()
@@ -65,18 +71,69 @@ class CommentsSheet : ExpandablePlayerSheet(R.layout.comments_sheet) {
             if (commentId == null) YouTubeCommentWebLinks.video(id)
             else YouTubeCommentWebLinks.comment(id, commentId)
         }
-        val browserIntent = url?.let { YouTubeCommentPanel.createIntent(requireContext(), it) }
-        if (browserIntent == null) {
-            Toast.makeText(
-                requireContext(), R.string.comments_open_on_youtube_failed, Toast.LENGTH_LONG
-            ).show()
+        val browserPackage = YouTubeCommentPanel.browserPackage(requireContext())
+        if (url == null || browserPackage == null) {
+            showYouTubePanelError()
             return
         }
+
+        // A session tied to a browser service is essential: a sessionless ACTION_VIEW
+        // can be intercepted by the installed YouTube app even when it has Custom Tabs extras.
+        releaseYouTubeBrowserConnection()
+        val applicationContext = requireContext().applicationContext
+        val connection = object : CustomTabsServiceConnection() {
+            override fun onCustomTabsServiceConnected(name: ComponentName, client: CustomTabsClient) {
+                if (youtubeBrowserConnection !== this || !isAdded) return
+                val intent = client.newSession(null)?.let { session ->
+                    YouTubeCommentPanel.createIntent(requireContext(), url, session)
+                }
+                if (intent == null) {
+                    releaseYouTubeBrowserConnection()
+                    showYouTubePanelError()
+                    return
+                }
+                try {
+                    youtubePanelLauncher.launch(intent)
+                } catch (_: ActivityNotFoundException) {
+                    releaseYouTubeBrowserConnection()
+                    showYouTubePanelError()
+                } catch (_: SecurityException) {
+                    releaseYouTubeBrowserConnection()
+                    showYouTubePanelError()
+                }
+            }
+
+            override fun onServiceDisconnected(name: ComponentName) {
+                if (youtubeBrowserConnection === this) releaseYouTubeBrowserConnection()
+            }
+        }
+        youtubeBrowserConnection = connection
+        youtubeBrowserContext = applicationContext
         try {
-            youtubePanelLauncher.launch(browserIntent)
-        } catch (_: ActivityNotFoundException) {
-            Toast.makeText(requireContext(), R.string.comments_open_on_youtube_failed, Toast.LENGTH_LONG).show()
+            if (!CustomTabsClient.bindCustomTabsService(applicationContext, browserPackage, connection)) {
+                releaseYouTubeBrowserConnection()
+                showYouTubePanelError()
+            }
         } catch (_: SecurityException) {
+            releaseYouTubeBrowserConnection()
+            showYouTubePanelError()
+        }
+    }
+
+    private fun releaseYouTubeBrowserConnection() {
+        val connection = youtubeBrowserConnection ?: return
+        youtubeBrowserConnection = null
+        val context = youtubeBrowserContext
+        youtubeBrowserContext = null
+        try {
+            context?.unbindService(connection)
+        } catch (_: IllegalArgumentException) {
+            // A failed bind never registered the service connection.
+        }
+    }
+
+    private fun showYouTubePanelError() {
+        if (isAdded) {
             Toast.makeText(requireContext(), R.string.comments_open_on_youtube_failed, Toast.LENGTH_LONG).show()
         }
     }
@@ -329,6 +386,7 @@ class CommentsSheet : ExpandablePlayerSheet(R.layout.comments_sheet) {
 
 
     override fun onDestroyView() {
+        releaseYouTubeBrowserConnection()
         Log.i(TAG, "sheet_view_destroyed pending=${commentTranslations.pendingAlice != null}")
         super.onDestroyView()
         _binding = null
