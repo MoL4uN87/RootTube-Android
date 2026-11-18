@@ -57,6 +57,7 @@ import com.github.libretube.ui.dialogs.ErrorDialog
 import com.github.libretube.ui.dialogs.ImportTempPlaylistDialog
 import com.github.libretube.ui.extensions.onSystemInsets
 import com.github.libretube.ui.fragments.DownloadsFragment
+import com.github.libretube.ui.fragments.TrendsFragment
 import com.github.libretube.ui.models.DownloadsViewModel
 import com.github.libretube.ui.models.PlaylistViewModel
 import com.github.libretube.ui.models.SearchViewModel
@@ -350,6 +351,21 @@ class MainActivity : AbstractPlayerHostActivity() {
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         // Inflate the menu; this adds items to the action bar if it is present.
         menuInflater.inflate(R.menu.action_bar, menu)
+
+        // Global toolbar shortcut, displayed directly to the left of VPN.
+        menu.findItem(R.id.action_roottube_top).actionView?.setOnClickListener {
+            val navHost = binding.fragment.getFragment<NavHostFragment>()
+            val currentFragment = navHost.childFragmentManager.primaryNavigationFragment
+            if (currentFragment is TrendsFragment) {
+                currentFragment.openTopChannels()
+            } else {
+                navController.navigate(
+                    R.id.trendsFragment,
+                    bundleOf(TrendsFragment.ARG_OPEN_TOP_CHANNELS to true)
+                )
+            }
+        }
+
         // RootTube: Telegram and Threads links inside the VPN information dialog.
         menu.findItem(R.id.action_roottube_vpn).actionView?.setOnClickListener {
             val vpnDialog = MaterialAlertDialogBuilder(this)

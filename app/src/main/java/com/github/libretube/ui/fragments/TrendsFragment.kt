@@ -52,10 +52,6 @@ class TrendsFragment : Fragment(R.layout.fragment_trends) {
         val adapter = TrendsAdapter(this, categories)
         binding.pager.adapter = adapter
 
-        binding.topChannelsButton.setOnClickListener {
-            val index = categories.indexOf(TrendingCategory.TOP_MY_CHANNELS)
-            if (index >= 0) binding.pager.setCurrentItem(index, true)
-        }
 
         if (categories.size <= 1) binding.tabLayout.isGone = true
         TabLayoutMediator(binding.tabLayout, binding.pager) { tab, position ->
@@ -68,7 +64,11 @@ class TrendsFragment : Fragment(R.layout.fragment_trends) {
             TrendingCategory.GAMING.name
         ).let { runCatching { TrendingCategory.valueOf(it) }.getOrDefault(TrendingCategory.GAMING) }
 
-        val initialTabIndex = categories.indexOf(initialCategory).coerceAtLeast(0)
+        val initialTabIndex = if (arguments?.getBoolean(ARG_OPEN_TOP_CHANNELS) == true) {
+            categories.indexOf(TrendingCategory.TOP_MY_CHANNELS).coerceAtLeast(0)
+        } else {
+            categories.indexOf(initialCategory).coerceAtLeast(0)
+        }
         val initialTab = binding.tabLayout.getTabAt(initialTabIndex)
         binding.tabLayout.selectTab(initialTab)
         binding.pager.setCurrentItem(initialTabIndex, false)
@@ -91,6 +91,12 @@ class TrendsFragment : Fragment(R.layout.fragment_trends) {
         }
     }
 
+    fun openTopChannels() {
+        val currentBinding = _binding ?: return
+        val lastTabIndex = (currentBinding.pager.adapter?.itemCount ?: 0) - 1
+        if (lastTabIndex >= 0) currentBinding.pager.setCurrentItem(lastTabIndex, true)
+    }
+
     override fun onDestroyView() {
         pagerCallback?.let { binding.pager.unregisterOnPageChangeCallback(it) }
         pagerCallback = null
@@ -100,6 +106,8 @@ class TrendsFragment : Fragment(R.layout.fragment_trends) {
     }
 
     companion object {
+        const val ARG_OPEN_TOP_CHANNELS = "roottube_open_top_channels"
+
         fun showChangeRegionDialog(context: Context, onPositiveButtonClick: () -> Unit) {
             val currentRegionPref = PreferenceHelper.getTrendingRegion(context)
 
