@@ -33,33 +33,15 @@ jobs:
           distribution: "temurin"
           cache: "gradle"
 
-      - name: Test and compile isolated Trends APK
-        run: |
-          ./gradlew :app:testDebugUnitTest :app:assembleDebug -ProottubeTrendsTest=true
+      - name: Test and compile regular RootTube APK
+        run: ./gradlew :app:testDebugUnitTest :app:assembleDebug
 
-      - name: Upload standalone Trends test APK
+      - name: Upload regular RootTube APK
         uses: actions/upload-artifact@v6
         with:
-          name: RootTube-Trends-Test
+          name: RootTube-Android-Updated
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
-
-      - name: Sign Apk
-        continue-on-error: true
-        id: sign_apk
-        uses: ilharp/sign-android-release@v2
-        with:
-          releaseDir: app/build/outputs/apk/debug
-          signingKey: ${{ secrets.ANDROID_SIGNING_KEY }}
-          keyAlias: ${{ secrets.ANDROID_KEY_ALIAS }}
-          keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v6
-        with:
-          name: app
-          path: app/build/outputs/apk/debug/app-debug-signed.apk
 
   release-nightly:
     if: github.ref_name == 'master'
