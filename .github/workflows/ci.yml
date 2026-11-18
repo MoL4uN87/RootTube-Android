@@ -33,9 +33,16 @@ jobs:
           distribution: "temurin"
           cache: "gradle"
 
-      - name: Compile
+      - name: Test and compile isolated Trends APK
         run: |
-          ./gradlew assembleDebug
+          ./gradlew :app:testDebugUnitTest :app:assembleDebug -ProottubeTrendsTest=true
+
+      - name: Upload standalone Trends test APK
+        uses: actions/upload-artifact@v6
+        with:
+          name: RootTube-Trends-Test
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
 
       - name: Sign Apk
         continue-on-error: true

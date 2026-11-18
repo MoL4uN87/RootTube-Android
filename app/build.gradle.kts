@@ -22,6 +22,8 @@ keyPassword=my_key_password
  */
 
 val keystoreProperties = Properties()
+// Opt-in standalone test APK: leaves existing com.roottube.android.debug installed.
+val isolatedTrendsTest = providers.gradleProperty("roottubeTrendsTest").orNull == "true"
 val keystoreFileExists = rootProject.file("keystore.properties").exists();
 if (keystoreFileExists) {
     keystoreProperties.load(rootProject.file("keystore.properties").inputStream())
@@ -73,8 +75,8 @@ android {
 
         getByName("debug") {
             isDebuggable = true
-            applicationIdSuffix = ".debug"
-            resValue("string", "app_name", "RootTube Debug")
+            applicationIdSuffix = if (isolatedTrendsTest) ".trendsdebug" else ".debug"
+            resValue("string", "app_name", if (isolatedTrendsTest) "RootTube Trends Test" else "RootTube Debug")
         }
     }
 
