@@ -21,6 +21,18 @@
             app:tabMode="scrollable" />
 
         <com.google.android.material.button.MaterialButton
+            android:id="@+id/top_channels_button"
+            style="@style/Widget.Material3Expressive.Button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="4dp"
+            android:layout_marginVertical="4dp"
+            android:minWidth="52dp"
+            android:textAllCaps="false"
+            android:text="@string/roottube_trends_top_short"
+            android:tooltipText="@string/roottube_trends_my_channels" />
+
+        <com.google.android.material.button.MaterialButton
             style="@style/Widget.Material3Expressive.Button.IconButton.Tonal"
             android:id="@+id/trending_region"
             android:layout_width="wrap_content"

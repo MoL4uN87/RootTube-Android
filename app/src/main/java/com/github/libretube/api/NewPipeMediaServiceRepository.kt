@@ -27,6 +27,7 @@ import com.github.libretube.extensions.toID
 import com.github.libretube.helpers.NewPipeExtractorInstance
 import com.github.libretube.helpers.PlayerHelper
 import com.github.libretube.ui.dialogs.ShareDialog.Companion.YOUTUBE_FRONTEND_URL
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.withContext
@@ -283,15 +284,37 @@ class NewPipeMediaServiceRepository : MediaServiceRepository {
                 .map { it.toStreamItem() }
         }
 
-        val kioskList = NewPipeExtractorInstance.extractor.kioskList
-        kioskList.forceContentCountry(ContentCountry(region))
+        // The official music kiosk can be empty or unavailable in some regions.
+        // Fall back to a video search instead of leaving the Music tab blank.
+        val official = try {
+            val kioskList = NewPipeExtractorInstance.extractor.kioskList
+            kioskList.forceContentCountry(ContentCountry(region))
 
-        val kioskId = requireNotNull(trendingCategories[category])
-        val extractor = kioskList.getExtractorById(kioskId, null)
-        extractor.fetchPage()
+            val kioskId = requireNotNull(trendingCategories[category])
+            val extractor = kioskList.getExtractorById(kioskId, null)
+            extractor.fetchPage()
 
-        val info = KioskInfo.getInfo(extractor)
-        return info.relatedItems.filterIsInstance<StreamInfoItem>().map { it.toStreamItem() }
+            val info = KioskInfo.getInfo(extractor)
+            info.relatedItems.filterIsInstance<StreamInfoItem>().map { it.toStreamItem() }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            if (category != TrendingCategory.MUSIC) throw e
+            emptyList()
+        }
+
+        if (category == TrendingCategory.MUSIC && official.isEmpty()) {
+            val year = java.time.Year.now().value
+            val query = if (region.equals("RU", ignoreCase = true)) {
+                "музыкальные новинки $year"
+            } else {
+                "new music videos $year"
+            }
+            return getSearchResults(query, "videos").items
+                .filter { it.type == TYPE_STREAM }
+                .map { it.toStreamItem() }
+        }
+        return official
     }
 
     override suspend fun getStreams(videoId: String): Streams = withContext(Dispatchers.IO) {

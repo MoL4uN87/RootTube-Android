@@ -12,6 +12,7 @@ import com.github.libretube.api.obj.StreamItem
 import com.github.libretube.extensions.TAG
 import com.github.libretube.extensions.toastFromMainDispatcher
 import com.github.libretube.helpers.PreferenceHelper
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -23,20 +24,22 @@ class TrendsViewModel : ViewModel() {
     val trendingVideos = MutableLiveData<Map<TrendingCategory, TrendingStreams>>()
     var recyclerViewState: Parcelable? = null
 
-    private var currentJob: Job? = null
+    private val currentJobs = mutableMapOf<TrendingCategory, Job>()
 
     fun fetchTrending(context: Context, category: TrendingCategory) {
-        // cancel previously started, still running requests as users can only see one tab at a time,
-        // so it doesn't make sense to continue loading the previously seen (now hidden) tab data
-        runCatching { currentJob?.cancel() }
+        // A ViewPager can create adjacent pages in parallel. Cancel only the request
+        // belonging to the same category, never the visible neighbour.
+        currentJobs[category]?.cancel()
 
-        currentJob = viewModelScope.launch {
+        currentJobs[category] = viewModelScope.launch {
             try {
                 val region = PreferenceHelper.getTrendingRegion(context)
                 val response = withContext(Dispatchers.IO) {
                     MediaServiceRepository.instance.getTrending(region, category)
                 }
                 setStreamsForCategory(category, TrendingStreams(region, response))
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.e(TAG(), e.stackTraceToString())
                 context.toastFromMainDispatcher(e.localizedMessage.orEmpty())

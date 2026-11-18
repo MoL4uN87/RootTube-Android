@@ -577,6 +577,8 @@
     <string name="roottube_trends_education">Образование</string>
     <string name="roottube_trends_humor">Юмор</string>
     <string name="roottube_trends_my_channels">Топ моих каналов</string>
+    <string name="roottube_trends_top_short">Топ</string>
+    <string name="roottube_trends_no_results">Видео не найдены. Обнови список или выбери другую категорию.</string>
     <string name="roottube_trends_no_channels">Открывай видео или каналы — здесь появится твой рейтинг по числу подписчиков.</string>
     <string name="roottube_trends_unknown_subscribers">Число подписчиков неизвестно</string>
 </resources>

@@ -587,6 +587,8 @@
     <string name="roottube_trends_education">Education</string>
     <string name="roottube_trends_humor">Humor</string>
     <string name="roottube_trends_my_channels">Top my channels</string>
+    <string name="roottube_trends_top_short">Top</string>
+    <string name="roottube_trends_no_results">No videos found. Try refreshing or choose another category.</string>
     <string name="roottube_trends_no_channels">Channels you open will appear here, sorted by subscriber count.</string>
     <string name="roottube_trends_unknown_subscribers">Subscriber count unavailable</string>
 </resources>

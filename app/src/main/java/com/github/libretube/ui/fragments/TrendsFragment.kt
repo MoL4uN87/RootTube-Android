@@ -52,6 +52,11 @@ class TrendsFragment : Fragment(R.layout.fragment_trends) {
         val adapter = TrendsAdapter(this, categories)
         binding.pager.adapter = adapter
 
+        binding.topChannelsButton.setOnClickListener {
+            val index = categories.indexOf(TrendingCategory.TOP_MY_CHANNELS)
+            if (index >= 0) binding.pager.setCurrentItem(index, true)
+        }
+
         if (categories.size <= 1) binding.tabLayout.isGone = true
         TabLayoutMediator(binding.tabLayout, binding.pager) { tab, position ->
             val category = categories[position]
@@ -178,6 +183,8 @@ class TrendsContentFragment : DynamicLayoutManagerFragment(R.layout.fragment_tre
             toggleLoadingIndicator(false)
 
             adapter.submitList(videos.streams)
+            binding.emptyState.setText(R.string.roottube_trends_no_results)
+            binding.emptyState.isVisible = videos.streams.isEmpty()
 
             val trendingRegion = PreferenceHelper.getTrendingRegion(requireContext())
             if (category.searchQuery == null && videos.streams.isEmpty() &&
@@ -209,7 +216,6 @@ class TrendsContentFragment : DynamicLayoutManagerFragment(R.layout.fragment_tre
             }
         })
 
-        viewModel.fetchTrending(requireContext(), category)
         lifecycleScope.launch {
             // every time the user navigates to the fragment for the selected category,
             // fetch the trends for the selected category if they're not yet cached or if the value
@@ -258,6 +264,7 @@ class TrendsContentFragment : DynamicLayoutManagerFragment(R.layout.fragment_tre
 
     private fun toggleLoadingIndicator(show: Boolean) {
         binding.recview.alpha = if (show) 0.3f else 1.0f
+        if (show) binding.emptyState.isGone = true
         binding.progressBar.isGone = !show
         if (!show) binding.homeRefresh.isRefreshing = false
     }
