@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.view.View
 import androidx.core.os.bundleOf
 import androidx.core.view.isGone
+import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Lifecycle
@@ -13,6 +14,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.viewpager2.widget.ViewPager2
 import androidx.viewpager2.adapter.FragmentStateAdapter
 import com.github.libretube.R
 import com.github.libretube.api.MediaServiceRepository
@@ -21,9 +23,12 @@ import com.github.libretube.constants.IntentData
 import com.github.libretube.constants.PreferenceKeys
 import com.github.libretube.databinding.FragmentTrendsBinding
 import com.github.libretube.databinding.FragmentTrendsContentBinding
+import com.github.libretube.db.DatabaseHolder
 import com.github.libretube.extensions.serializable
 import com.github.libretube.helpers.LocaleHelper
 import com.github.libretube.helpers.PreferenceHelper
+import com.github.libretube.helpers.ViewedChannelsHelper
+import com.github.libretube.ui.adapters.TopViewedChannelsAdapter
 import com.github.libretube.ui.adapters.VideoCardsAdapter
 import com.github.libretube.ui.base.DynamicLayoutManagerFragment
 import com.github.libretube.ui.models.TrendsViewModel
@@ -31,15 +36,18 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
 import com.google.android.material.tabs.TabLayoutMediator
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.collectLatest
 
 class TrendsFragment : Fragment(R.layout.fragment_trends) {
     private var _binding: FragmentTrendsBinding? = null
     private val binding get() = _binding!!
+    private var pagerCallback: ViewPager2.OnPageChangeCallback? = null
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         _binding = FragmentTrendsBinding.bind(view)
 
-        val categories = MediaServiceRepository.instance.getTrendingCategories()
+        val categories = MediaServiceRepository.instance.getTrendingCategories() +
+            TrendingCategory.TOP_MY_CHANNELS
 
         val adapter = TrendsAdapter(this, categories)
         binding.pager.adapter = adapter
@@ -53,12 +61,21 @@ class TrendsFragment : Fragment(R.layout.fragment_trends) {
         val initialCategory = PreferenceHelper.getString(
             PreferenceKeys.TRENDING_CATEGORY,
             TrendingCategory.GAMING.name
-        ).let { TrendingCategory.valueOf(it) }
+        ).let { runCatching { TrendingCategory.valueOf(it) }.getOrDefault(TrendingCategory.GAMING) }
 
-        val initialTabIndex = categories.indexOf(initialCategory)
+        val initialTabIndex = categories.indexOf(initialCategory).coerceAtLeast(0)
         val initialTab = binding.tabLayout.getTabAt(initialTabIndex)
         binding.tabLayout.selectTab(initialTab)
         binding.pager.setCurrentItem(initialTabIndex, false)
+
+        pagerCallback = object : ViewPager2.OnPageChangeCallback() {
+            override fun onPageSelected(position: Int) {
+                binding.trendingRegion.isGone = categories[position].isPersonalRanking ||
+                    categories[position].searchQuery != null
+            }
+        }.also { binding.pager.registerOnPageChangeCallback(it) }
+        binding.trendingRegion.isGone = categories[initialTabIndex].isPersonalRanking ||
+            categories[initialTabIndex].searchQuery != null
 
         binding.trendingRegion.setOnClickListener {
             showChangeRegionDialog(requireContext()) {
@@ -67,6 +84,14 @@ class TrendsFragment : Fragment(R.layout.fragment_trends) {
                 }
             }
         }
+    }
+
+    override fun onDestroyView() {
+        pagerCallback?.let { binding.pager.unregisterOnPageChangeCallback(it) }
+        pagerCallback = null
+        binding.pager.adapter = null
+        _binding = null
+        super.onDestroyView()
     }
 
     companion object {
@@ -126,7 +151,9 @@ class TrendsContentFragment : DynamicLayoutManagerFragment(R.layout.fragment_tre
     private val category get() = _category!!
 
     override fun setLayoutManagers(gridItems: Int) {
-        _binding?.recview?.layoutManager = GridLayoutManager(context, gridItems)
+        _binding?.recview?.layoutManager = GridLayoutManager(
+            context, if (_category?.isPersonalRanking == true) 1 else gridItems
+        )
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -135,6 +162,11 @@ class TrendsContentFragment : DynamicLayoutManagerFragment(R.layout.fragment_tre
 
         _category = requireArguments()
             .serializable<TrendingCategory>(IntentData.category)!!
+
+        if (category.isPersonalRanking) {
+            showPersonalRanking()
+            return
+        }
 
         val adapter = VideoCardsAdapter()
         binding.recview.adapter = adapter
@@ -148,7 +180,9 @@ class TrendsContentFragment : DynamicLayoutManagerFragment(R.layout.fragment_tre
             adapter.submitList(videos.streams)
 
             val trendingRegion = PreferenceHelper.getTrendingRegion(requireContext())
-            if (videos.streams.isEmpty() && (videos.region == trendingRegion)) {
+            if (category.searchQuery == null && videos.streams.isEmpty() &&
+                videos.region == trendingRegion
+            ) {
                 Snackbar.make(
                     requireParentFragment().requireView(),
                     R.string.change_region,
@@ -183,8 +217,27 @@ class TrendsContentFragment : DynamicLayoutManagerFragment(R.layout.fragment_tre
             repeatOnLifecycle(Lifecycle.State.RESUMED) {
                 val trendingRegion = PreferenceHelper.getTrendingRegion(requireContext())
                 val trendingVideos = viewModel.trendingVideos.value.orEmpty()[category]
-                if (trendingVideos == null || (trendingVideos.region != trendingRegion)) {
+                if (trendingVideos == null ||
+                    (category.searchQuery == null && trendingVideos.region != trendingRegion)
+                ) {
                     refreshTrending()
+                }
+            }
+        }
+    }
+
+    private fun showPersonalRanking() {
+        val adapter = TopViewedChannelsAdapter()
+        binding.recview.adapter = adapter
+        binding.recview.layoutManager = GridLayoutManager(context, 1)
+        binding.progressBar.isGone = true
+        binding.homeRefresh.isEnabled = false
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                DatabaseHolder.Database.viewedChannelDao().observeAll().collectLatest { channels ->
+                    adapter.submitList(ViewedChannelsHelper.rank(channels))
+                    _binding?.emptyState?.isVisible = channels.isEmpty()
                 }
             }
         }
@@ -193,7 +246,9 @@ class TrendsContentFragment : DynamicLayoutManagerFragment(R.layout.fragment_tre
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         // manually restore the recyclerview state due to https://github.com/material-components/material-components-android/issues/3473
-        binding.recview.layoutManager?.onRestoreInstanceState(viewModel.recyclerViewState)
+        if (!category.isPersonalRanking) {
+            binding.recview.layoutManager?.onRestoreInstanceState(viewModel.recyclerViewState)
+        }
     }
 
     override fun onDestroyView() {
@@ -208,6 +263,7 @@ class TrendsContentFragment : DynamicLayoutManagerFragment(R.layout.fragment_tre
     }
 
     fun refreshTrending() {
+        if (category.isPersonalRanking) return
         toggleLoadingIndicator(true)
         viewModel.fetchTrending(requireContext(), category)
     }

@@ -259,24 +259,34 @@ class NewPipeMediaServiceRepository : MediaServiceRepository {
     }
 
     // see https://github.com/TeamNewPipe/NewPipeExtractor/tree/dev/extractor/src/main/java/org/schabi/newpipe/extractor/services/youtube/extractors/kiosk
-    private val trendingCategories = TrendingCategory.entries.associate {
+    private val trendingCategories = TrendingCategory.entries
+        .filter { it.searchQuery == null && !it.isPersonalRanking }
+        .associate {
         when (it) {
             TrendingCategory.GAMING -> it to "trending_gaming"
             TrendingCategory.TRAILERS -> it to "trending_movies_and_shows"
             TrendingCategory.PODCASTS -> it to "trending_podcasts_episodes"
             TrendingCategory.MUSIC -> it to "trending_music"
             TrendingCategory.LIVE -> it to "live"
+            else -> error("Unsupported official trending category: $it")
         }
     }
 
     override fun getTrendingCategories(): List<TrendingCategory> =
-        trendingCategories.keys.toList()
+        TrendingCategory.entries.filterNot { it.isPersonalRanking }
 
     override suspend fun getTrending(region: String, category: TrendingCategory): List<StreamItem> {
+        require(!category.isPersonalRanking) { "Personal ranking is loaded from the local database" }
+        category.searchQuery?.let { query ->
+            return getSearchResults(query, "videos").items
+                .filter { it.type == TYPE_STREAM }
+                .map { it.toStreamItem() }
+        }
+
         val kioskList = NewPipeExtractorInstance.extractor.kioskList
         kioskList.forceContentCountry(ContentCountry(region))
 
-        val kioskId = trendingCategories[category]
+        val kioskId = requireNotNull(trendingCategories[category])
         val extractor = kioskList.getExtractorById(kioskId, null)
         extractor.fetchPage()
 

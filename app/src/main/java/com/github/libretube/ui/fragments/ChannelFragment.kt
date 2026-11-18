@@ -25,6 +25,7 @@ import com.github.libretube.extensions.toastFromMainDispatcher
 import com.github.libretube.helpers.ClipboardHelper
 import com.github.libretube.helpers.ImageHelper
 import com.github.libretube.helpers.NavigationHelper
+import com.github.libretube.helpers.ViewedChannelsHelper
 import com.github.libretube.ui.extensions.setupSubscriptionButton
 import com.github.libretube.ui.models.ChannelViewModel
 import com.github.libretube.ui.sheets.ChannelOptionsBottomSheet
@@ -132,6 +133,13 @@ class ChannelFragment : Fragment(R.layout.fragment_channel) {
         channelName = response.name
 
         val channelId = channelId ?: return@launch
+
+        // Only a fully loaded channel page contributes to the personal ranking.
+        viewLifecycleOwner.lifecycleScope.launch {
+            ViewedChannelsHelper.record(
+                channelId, response.name, response.avatarUrl, response.subscriberCount
+            )
+        }
 
         var isSubscribed = false
         binding.channelSubscribe.setupSubscriptionButton(

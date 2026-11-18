@@ -84,6 +84,7 @@ import com.github.libretube.helpers.PlayerHelper
 import com.github.libretube.helpers.PlayerHelper.getCurrentSegment
 import com.github.libretube.helpers.ThemeHelper
 import com.github.libretube.helpers.WindowHelper
+import com.github.libretube.helpers.ViewedChannelsHelper
 import com.github.libretube.obj.ShareData
 import com.github.libretube.parcelable.PlayerData
 import com.github.libretube.services.AbstractPlayerService
@@ -1340,6 +1341,17 @@ class PlayerFragment : Fragment(R.layout.fragment_player), CustomPlayerCallback 
         dismissCommentsSheet()
 
         setPlayerDefaults()
+
+        // A video opening counts as a visit to its uploader's channel.
+        val shownStreams = streams
+        viewLifecycleOwner.lifecycleScope.launch {
+            ViewedChannelsHelper.record(
+                shownStreams.uploaderUrl,
+                shownStreams.uploader,
+                shownStreams.uploaderAvatar,
+                shownStreams.uploaderSubscriberCount
+            )
+        }
 
         binding.player.useController = false
 

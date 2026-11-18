@@ -14,6 +14,7 @@ import com.github.libretube.db.dao.SubscriptionGroupsDao
 import com.github.libretube.db.dao.SubscriptionsFeedDao
 import com.github.libretube.db.dao.WatchHistoryDao
 import com.github.libretube.db.dao.WatchPositionDao
+import com.github.libretube.db.dao.ViewedChannelDao
 import com.github.libretube.db.obj.CustomInstance
 import com.github.libretube.db.obj.Download
 import com.github.libretube.db.obj.DownloadChapter
@@ -30,6 +31,7 @@ import com.github.libretube.db.obj.SubscriptionGroup
 import com.github.libretube.db.obj.SubscriptionsFeedItem
 import com.github.libretube.db.obj.WatchHistoryItem
 import com.github.libretube.db.obj.WatchPosition
+import com.github.libretube.db.obj.ViewedChannel
 
 @Database(
     entities = [
@@ -48,9 +50,10 @@ import com.github.libretube.db.obj.WatchPosition
         DownloadPlaylist::class,
         DownloadPlaylistVideosCrossRef::class,
         SubscriptionGroup::class,
-        SubscriptionsFeedItem::class
+        SubscriptionsFeedItem::class,
+        ViewedChannel::class
     ],
-    version = 25,
+    version = 26,
     autoMigrations = [
         AutoMigration(from = 7, to = 8),
         AutoMigration(from = 8, to = 9),
@@ -115,4 +118,7 @@ abstract class AppDatabase : RoomDatabase() {
      * Locally cached subscription feed
      */
     abstract fun feedDao(): SubscriptionsFeedDao
+
+    /** Channels opened by this user, ordered in the UI by subscribers. */
+    abstract fun viewedChannelDao(): ViewedChannelDao
 }

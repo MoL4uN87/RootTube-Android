@@ -48,10 +48,21 @@ interface MediaServiceRepository {
     }
 }
 
-enum class TrendingCategory(@StringRes val titleRes: Int) {
+enum class TrendingCategory(
+    @StringRes val titleRes: Int,
+    val searchQuery: String? = null,
+    val isPersonalRanking: Boolean = false
+) {
     GAMING(R.string.gaming),
     TRAILERS(R.string.trailers),
     PODCASTS(R.string.podcasts),
     MUSIC(R.string.music),
-    LIVE(R.string.live)
+    LIVE(R.string.live),
+    SPORTS(R.string.roottube_trends_sports, searchQuery = "спорт"),
+    TECHNOLOGY(R.string.roottube_trends_technology, searchQuery = "технологии"),
+    CARS(R.string.roottube_trends_cars, searchQuery = "автомобили"),
+    NEWS(R.string.roottube_trends_news, searchQuery = "новости"),
+    EDUCATION(R.string.roottube_trends_education, searchQuery = "образование"),
+    HUMOR(R.string.roottube_trends_humor, searchQuery = "юмор"),
+    TOP_MY_CHANNELS(R.string.roottube_trends_my_channels, isPersonalRanking = true)
 }

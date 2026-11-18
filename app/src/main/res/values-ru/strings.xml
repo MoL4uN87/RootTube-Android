@@ -570,4 +570,13 @@
     <string name="sync_type_summary_piped">Только для экспертов, устарело:\nСохраняйте данные плейлистов и подписок в Piped (%1$s). Поскольку общедоступных экземпляров Piped больше нет, у вас должен быть собственный экземпляр Piped.</string>
     <string name="switch_sync_type_warning">Если вы ранее использовали другой тип синхронизации, сначала создайте резервную копию ваших подписок и плейлистов. После этого вы сможете изменить тип синхронизации в настройках экземпляра и повторно импортировать свои данные из резервной копии.</string>
     <string name="account">Учетная запись</string>
+    <string name="roottube_trends_sports">Спорт</string>
+    <string name="roottube_trends_technology">Технологии</string>
+    <string name="roottube_trends_cars">Автомобили</string>
+    <string name="roottube_trends_news">Новости</string>
+    <string name="roottube_trends_education">Образование</string>
+    <string name="roottube_trends_humor">Юмор</string>
+    <string name="roottube_trends_my_channels">Топ моих каналов</string>
+    <string name="roottube_trends_no_channels">Открывай видео или каналы — здесь появится твой рейтинг по числу подписчиков.</string>
+    <string name="roottube_trends_unknown_subscribers">Число подписчиков неизвестно</string>
 </resources>

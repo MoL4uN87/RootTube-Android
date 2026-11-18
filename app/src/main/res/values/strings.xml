@@ -580,4 +580,13 @@
     <string name="import_temp_playlist_summary">Do you want to create a new playlist named \'%1$s\'? The playlist will contain %2$d videos.</string>
     <string name="comment_verified">Verified</string>
     <string name="comment_pinned">Pinned</string>
+    <string name="roottube_trends_sports">Sports</string>
+    <string name="roottube_trends_technology">Technology</string>
+    <string name="roottube_trends_cars">Cars</string>
+    <string name="roottube_trends_news">News</string>
+    <string name="roottube_trends_education">Education</string>
+    <string name="roottube_trends_humor">Humor</string>
+    <string name="roottube_trends_my_channels">Top my channels</string>
+    <string name="roottube_trends_no_channels">Channels you open will appear here, sorted by subscriber count.</string>
+    <string name="roottube_trends_unknown_subscribers">Subscriber count unavailable</string>
 </resources>
